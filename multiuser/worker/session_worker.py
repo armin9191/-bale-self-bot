@@ -103,16 +103,15 @@ def _is_owner(msg: Message, st: UserState) -> bool:
 def _apply_style(st: UserState, text: str) -> str:
     if not text:
         return text
-    if text.startswith("**") or text.startswith("__"):
+    if text.startswith("*") or text.startswith("_"):
         return text
     if st.bold_on and st.italic_on:
-        return f"**__{text}__**"
+        return f"*_{text}_*"
     if st.bold_on:
-        return f"**{text}**"
+        return f"*{text}*"
     if st.italic_on:
-        return f"__{text}__"
+        return f"_{text}_"
     return text
-
 
 def _build_dispatcher(bot_user_id: int) -> Dispatcher:
     dp = Dispatcher()
