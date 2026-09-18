@@ -1,0 +1,3 @@
+aiobale-py
+requests
+aiohttp
