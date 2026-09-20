@@ -1,4 +1,3 @@
-```python
 # POSSIBLY
 # Python 3.12+
 
@@ -82,4 +81,3 @@ class Settings:
 
 
 settings = Settings()
-```
