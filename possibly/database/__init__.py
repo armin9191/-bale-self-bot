@@ -1,4 +1,3 @@
-```python
 # POSSIBLY
 # Central handler registry
 
@@ -39,4 +38,4 @@ def register_handlers(bot: bale.Bot) -> None:
     register_whisper_handlers(bot)
 
     logger.info("Handler registry loaded")
-```
+
