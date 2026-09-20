@@ -1,5 +1,7 @@
 # POSSIBLY
-# Permission helpers
+# Permission system
+
+from __future__ import annotations
 
 from enum import StrEnum
 
@@ -27,27 +29,11 @@ def is_privileged(user_id: int) -> bool:
     )
 
 
-def role_name(role: Role) -> str:
-    if role == Role.OWNER:
-        return "👑 Owner"
+def role_for_user(user_id: int) -> Role:
+    if is_owner(user_id):
+        return Role.OWNER
 
-    if role == Role.ADMIN:
-        return "🛡 Admin"
+    if is_configured_admin(user_id):
+        return Role.ADMIN
 
-    return "👤 Member"
-
-
-def can_manage(user_id: int) -> bool:
-    return is_privileged(user_id)
-
-
-def can_manage_learning(user_id: int) -> bool:
-    return is_privileged(user_id)
-
-
-def can_view_admin_panel(user_id: int) -> bool:
-    return is_privileged(user_id)
-
-
-def can_request_backup(user_id: int) -> bool:
-    return user_id == settings.POSSIBLY_ADMIN_ID
+    return Role.MEMBER
