@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
-    BOT_TOKEN: str = "PUT_NEW_BALE_TOKEN_HERE"
-    DATABASE_URL: str = "PUT_RAILWAY_PUBLIC_DATABASE_URL_HERE"
+    BOT_TOKEN: str = "1266619413:auADLARdWSeTJQaA9dxuUc01oxee7L_BsNo"
+    DATABASE_URL: str = "postgresql://postgres:cMNEnLwTdcfVuREgxJEbhxqzfUtwVjvM@postgres.railway.internal:5432/railway"
     ALLOWED_GROUP_ID: int = 4739068741
     ALLOWED_GROUP_USERNAME: str = "@possibly"
     OWNER_ID: int = 1967315238
