@@ -11,7 +11,7 @@ class Settings:
     # ============================================================
 
     BOT_TOKEN: str = (
-        "1266619413:auADLARw9eTJbWSeTJQaA9dxuUc01oxee7L_BsNo"
+        "1266619413:auADLARdWSeTJQaA9dxuUc01oxee7L_BsNo"
     )
 
     # ============================================================
