@@ -3,3 +3,4 @@ asyncpg>=0.29,<1
 Pillow>=10,<12
 arabic-reshaper>=3,<4
 python-bidi>=0.4,<1
+imageio-ffmpeg>=0.5,<1

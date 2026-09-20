@@ -88,23 +88,42 @@ def _magic(data: bytes) -> str:
     return "unknown"
 
 
+def _ffmpeg_bin() -> str:
+    """Prefer bundled imageio-ffmpeg binary; fallback to system ffmpeg."""
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception as e:
+        log.warning("imageio-ffmpeg unavailable: %s", e)
+        return "ffmpeg"
+
+
 def _mp4_to_gif_bytes(data: bytes) -> bytes:
-    """Convert MP4 animation to GIF via ffmpeg if available."""
+    """Convert MP4 animation to GIF via bundled/system ffmpeg."""
+    ff = _ffmpeg_bin()
     with tempfile.TemporaryDirectory() as td:
         src = Path(td) / "in.mp4"
         dst = Path(td) / "out.gif"
         src.write_bytes(data)
         cmd = [
-            "ffmpeg", "-y", "-i", str(src),
-            "-vf", "fps=12,scale=min(480\\,iw):-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+            ff, "-y", "-i", str(src),
+            "-t", "8",
+            "-vf", "fps=10,scale=480:-1:flags=lanczos",
             "-loop", "0",
             str(dst),
         ]
-        proc = subprocess.run(cmd, capture_output=True, timeout=60)
-        if proc.returncode != 0 or not dst.is_file() or dst.stat().st_size == 0:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, timeout=90)
+        except FileNotFoundError as e:
             raise ValueError(
-                "این فایل گیف واقعی نیست (احتمالاً MP4 است) و تبدیل با ffmpeg ممکن نشد. "
-                "یک GIF معمولی بفرست یا ffmpeg را روی سرور نصب کن."
+                "ffmpeg پیدا نشد. dependency imageio-ffmpeg را نصب کن و سرویس را redeploy کن."
+            ) from e
+        if proc.returncode != 0 or not dst.is_file() or dst.stat().st_size == 0:
+            err = (proc.stderr or b"").decode("utf-8", errors="ignore")[-400:]
+            log.warning("ffmpeg convert failed: %s", err)
+            raise ValueError(
+                "این فایل گیف واقعی نیست (احتمالاً ویدیو/MP4 بله است) و تبدیل ناموفق بود. "
+                "یک GIF معمولی بفرست."
             )
         return dst.read_bytes()
 
