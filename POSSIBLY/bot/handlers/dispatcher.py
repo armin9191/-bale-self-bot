@@ -37,6 +37,35 @@ _backup_last: float = 0.0
 TTT: dict[int, TicTacToe] = {}
 MAFIA: dict[int, dict] = {}
 TOD: dict[int, dict] = {}
+_bot: Optional[Bot] = None
+
+
+def _get_bot(obj=None) -> Optional[Bot]:
+    """Resolve Bot instance from message/file or module registry."""
+    global _bot
+    if obj is not None:
+        # BaleObject.bot property / get_bot()
+        b = getattr(obj, "bot", None)
+        if b is not None:
+            return b
+        getter = getattr(obj, "get_bot", None)
+        if callable(getter):
+            try:
+                return getter()
+            except Exception:
+                pass
+        chat = getattr(obj, "chat", None)
+        if chat is not None:
+            b = getattr(chat, "bot", None)
+            if b is not None:
+                return b
+            getter = getattr(chat, "get_bot", None)
+            if callable(getter):
+                try:
+                    return getter()
+                except Exception:
+                    pass
+    return _bot
 
 
 def _uid(m: Message) -> Optional[int]:
@@ -277,23 +306,38 @@ async def _gif(m: Message, t: str) -> bool:
     if reply is None:
         await m.reply(error("روی یک گیف/انیمیشن ریپلای کن."))
         return True
-    anim = getattr(reply, "animation", None) or getattr(reply, "document", None)
+    anim = getattr(reply, "animation", None) or getattr(reply, "document", None) or getattr(reply, "video", None)
     if anim is None:
-        await m.reply(error("پیام ریپلای‌شده گیف نیست."))
+        await m.reply(error("پیام ریپلای‌شده گیف/فایل نیست."))
         return True
     file_id = getattr(anim, "file_id", None) or getattr(anim, "id", None)
     if not file_id:
         await m.reply(error("file_id پیدا نشد."))
         return True
     try:
-        bot = m.chat.bot if getattr(m, "chat", None) else None
-        if bot is None:
-            await m.reply(error("بات در دسترس نیست."))
-            return True
-        raw = await bot.get_file(str(file_id))
+        raw = None
+        # 1) BaseFile.get() if available
+        if hasattr(anim, "get") and callable(anim.get):
+            try:
+                raw = await anim.get()
+            except Exception as e:
+                log.warning("anim.get failed: %s", e)
+        # 2) Message/Chat get_bot + Bot.get_file
+        if not raw:
+            bot = _get_bot(m) or _get_bot(anim) or _get_bot(reply)
+            if bot is None:
+                await m.reply(error("بات در دسترس نیست (bot instance)."))
+                return True
+            raw = await bot.get_file(str(file_id))
         if not raw:
             await m.reply(error("دانلود فایل ناموفق."))
             return True
+        if not isinstance(raw, (bytes, bytearray)):
+            # some wrappers return file-like
+            raw = bytes(raw) if hasattr(raw, "__iter__") else None
+            if not raw:
+                await m.reply(error("محتوای فایل نامعتبر."))
+                return True
         out = process_gif(raw, caption)
         if not out:
             await m.reply(error("پردازش گیف ناموفق."))
@@ -303,21 +347,44 @@ async def _gif(m: Message, t: str) -> bool:
         path = tmp / f"gif_{int(time.time())}.gif"
         path.write_bytes(out)
         sent = False
+        # Prefer message.reply_animation / reply_document
         try:
-            await m.chat.send_animation(InputFile(str(path)))
-            sent = True
-        except Exception as e1:
-            log.warning("send_animation failed: %s", e1)
+            if hasattr(m, "reply_animation"):
+                await m.reply_animation(InputFile(path.read_bytes() if False else str(path)))
+                sent = True
+        except Exception as e0:
+            log.warning("reply_animation failed: %s", e0)
+        if not sent:
+            try:
+                chat = getattr(m, "chat", None)
+                if chat is not None and hasattr(chat, "send_animation"):
+                    await chat.send_animation(InputFile(str(path)))
+                    sent = True
+            except Exception as e1:
+                log.warning("chat.send_animation failed: %s", e1)
+        if not sent:
             try:
                 if hasattr(m, "reply_document"):
-                    await m.reply_document(str(path), caption="گیف POSSIBLY")
-                else:
+                    await m.reply_document(InputFile(str(path)))
+                    sent = True
+                elif getattr(m, "chat", None) is not None:
                     await m.chat.send_document(InputFile(str(path)))
-                sent = True
+                    sent = True
             except Exception as e2:
                 log.warning("send_document failed: %s", e2)
-        finally:
+        # last resort: bot.send_animation
+        if not sent:
+            bot = _get_bot(m)
+            if bot is not None:
+                try:
+                    await bot.send_animation(getattr(m.chat, "id", None) or _gid(m), InputFile(str(path)))
+                    sent = True
+                except Exception as e3:
+                    log.warning("bot.send_animation failed: %s", e3)
+        try:
             path.unlink(missing_ok=True)
+        except Exception:
+            pass
         if not sent:
             await m.reply(error("ارسال گیف ناموفق بود."))
     except ValueError as e:
@@ -347,9 +414,9 @@ async def _do_backup(m: Message, user: int) -> None:
         if hasattr(m, "reply_document"):
             await m.reply_document(path, caption="POSSIBLY DB Backup")
         else:
-            bot = getattr(getattr(m, "chat", None), "bot", None)
+            bot = _get_bot(m)
             if bot:
-                await bot.send_document(m.chat.id, InputFile(path), caption="POSSIBLY DB Backup")
+                await bot.send_document(getattr(m.chat, "id", None) or _gid(m), InputFile(path), caption="POSSIBLY DB Backup")
             else:
                 await m.reply(success(f"فایل: {path}"))
     except Exception as e:
@@ -662,7 +729,7 @@ async def on_callback(cb: CallbackQuery) -> None:
             st["phase"] = MafiaPhase.NIGHT.value
             st["day"] = 1
             # private role messages
-            bot = getattr(getattr(msg, "chat", None), "bot", None)
+            bot = _get_bot(msg)
             for pid, role in st["roles"].items():
                 try:
                     if bot:
@@ -731,6 +798,9 @@ async def on_callback(cb: CallbackQuery) -> None:
 
 
 def register_handlers(bot: Bot) -> None:
+    global _bot
+    _bot = bot
+
     @bot.listen("on_message")
     async def _m(message: Message):
         try:
