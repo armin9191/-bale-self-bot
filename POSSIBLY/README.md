@@ -1,82 +1,147 @@
-# ⚔️ POSSIBLY
+# POSSIBLY
 
-A PostgreSQL-backed Group Management + Fun + Games bot for Bale, restricted to `@possibly`.
+**Group Management + Fun + Games Bot** برای پیام‌رسان بله (Bale).
 
-## Verified library
+فقط در گروه `@possibly` (ID: `4739068741`) فعال است.
 
-This project targets `python-bale-bot==2.5.0`. The official documentation confirms `Bot.run()` is the synchronous entry point, message/callback events, inline keyboards, `ban_chat_member`, `unban_chat_member`, `get_chat_member`, `get_chat_administrators`, `Message.delete`, and document sending. See the official docs/changelog before extending the project.
+## ویژگی‌ها
 
-## Important security note
+- محدودیت سخت گروهی
+- مدیریت: `/ban` `/kick` `/unban` (با User ID یا Reply)
+- سیستم یادگیری (یاد بگیر / فراموش کن / لیست یادگیری)
+- اکو
+- نجوا (Whisper) با دکمه مشاهده فقط برای گیرنده
+- آمار روزانه واقعی از PostgreSQL
+- بازی دوز (Tic-Tac-Toe) با اینلاین کیبورد
+- موتور مافیا و جرأت‌حقیقت (قابل گسترش)
+- منوی خصوصی با نقش‌ها
+- بکاپ PostgreSQL فقط برای Owner
+- Rate limit و لاگ امن
 
-The configuration file intentionally contains placeholders. Do **not** commit a live Bale token or a private Railway PostgreSQL URL to GitHub. A token previously pasted into chat should be rotated before using this repository.
+## تکنولوژی
 
-For Railway, the PostgreSQL address must be reachable from the bot service. A hostname ending in `.railway.internal` is normally private to Railway's internal network and should not be used from a local Windows machine.
+- Python 3.12+
+- `python-bale-bot==2.5.0`
+- PostgreSQL + `asyncpg`
+- Pillow / arabic-reshaper / python-bidi (برای قابلیت GIF آینده)
+- Railway Worker
 
-## Config
+## نصب محلی
 
-Edit `config.py`:
+```bash
+cd POSSIBLY
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-- `BOT_TOKEN`
-- `DATABASE_URL` (use the Railway public/external connection string for local testing)
-- `ALLOWED_GROUP_ID`
-- `OWNER_ID`
-- `POSSIBLY_ADMIN_ID`
+### Configuration
 
-No `.env` file is required by this project.
+Secrets را **هرگز** در Git commit نکنید.
 
-## Run locally
+```bash
+export BOT_TOKEN="your_token_from_BotFather"
+export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
+export OWNER_ID=1967315238
+export POSSIBLY_ADMIN_ID=1967315238
+export ALLOWED_GROUP_ID=4739068741
+```
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+یا مقادیر را موقتاً در `config.py` برای تست محلی بگذارید (قبل از push پاک کنید).
+
+### اجرا
+
+```bash
 python main.py
+```
+
+لاگ مورد انتظار:
+
+```
+[INFO] POSSIBLY starting
+[INFO] Connected to PostgreSQL
+[INFO] Handler registry loaded
+[INFO] POSSIBLY initialized
+[INFO] Bot is running
 ```
 
 ## Railway
 
-Set the same values in `config.py` if you deliberately want a code-only configuration. For a public GitHub repository, use Railway service variables instead and keep secrets out of Git.
+1. پروژه را به Railway وصل کنید.
+2. PostgreSQL plugin اضافه کنید.
+3. Variables:
+   - `BOT_TOKEN`
+   - `DATABASE_URL` (از پلاگین PostgreSQL)
+   - `OWNER_ID` / `POSSIBLY_ADMIN_ID` / `ALLOWED_GROUP_ID` (اختیاری)
+4. `Procfile`:
+   ```
+   worker: python main.py
+   ```
+5. `runtime.txt`: `python-3.12`
 
-The Worker command is:
+## ساختار
 
-```text
-python main.py
+```
+POSSIBLY/
+├── main.py
+├── config.py
+├── requirements.txt
+├── Procfile
+├── runtime.txt
+├── bot/
+│   ├── handlers/          # dispatcher مرکزی + ماژول‌ها
+│   ├── games/             # موتورهای بازی بدون وابستگی به Bale
+│   ├── keyboards.py
+│   ├── messages.py
+│   └── permissions.py
+└── database/
+    ├── postgres.py
+    └── repositories.py
 ```
 
-`pg_dump` must be available in the Railway image if the `بکاپ` feature is used. If it is not available, the bot reports that backup creation failed.
+## محدودیت‌های واقعی API بله
 
-## Current implemented features
+- لیست کامل اعضای گروه وجود ندارد → فقط کاربران مشاهده‌شده توسط ربات ذخیره می‌شوند.
+- Kick خالص وجود ندارد → ban سپس unban استفاده می‌شود.
+- دسترسی‌های پیشرفته promote/restrict محدودتر از تلگرام است.
+- نجوا در گروه محتوا را نشان نمی‌دهد؛ فقط گیرنده از طریق دکمه می‌بیند (یا پیام خصوصی در صورت امکان).
 
-- Single centralized message dispatcher (avoids competing `on_message` registrations)
-- PostgreSQL pool and schema creation
-- Allowed-group gate
-- Owner / configured admin permission checks
-- `/ban`, `/unban`, `/kick` using verified Bale chat methods
-- Reply or numeric User ID targeting
-- Learning system with 300-item limit
-- Daily PostgreSQL statistics
-- Echo command with message deletion attempt
-- Private menu with inline keyboard
-- Callback handling
-- Tic-Tac-Toe engine and callback board
-- PostgreSQL moderation log table
-- PostgreSQL backup command for the configured admin
+## امنیت
 
-## API limitations / deliberately not faked
+- Token و DATABASE_URL فقط از Environment Variables خوانده می‌شوند.
+- User ID معیار اصلی permission است (نه username).
+- Owner/Admin محافظت‌شده در برابر ban/kick.
+- بکاپ فقط برای `POSSIBLY_ADMIN_ID` ارسال می‌شود.
+- هیچ secret در لاگ چاپ نمی‌شود.
 
-Some requested behavior depends on capabilities not represented by a single verified library method or requires additional privacy semantics. In particular:
+## دستورات گروه
 
-- A true temporary kick is implemented as ban followed by immediate unban; there is no claim that this is an atomic timed-kick API. A scheduled five-second unban can be added with a task queue later.
-- Whisper receiver-only visibility needs a carefully scoped private interaction. The project does not expose whisper content publicly as a fake implementation.
-- Full animated GIF caption rendering is isolated but not enabled in the dispatcher until file-download/upload behavior and Railway resource limits are configured for the target deployment.
-- Full persistent Mafia and Truth/Dare orchestration still belongs in the game-service layer; the Tic-Tac-Toe path is the first complete interactive game in this baseline.
-- Bale's member-list API exposes administrators and member-count methods; the bot should not pretend it can enumerate every member when the installed API does not provide a general member-list method.
+| دستور | توضیح |
+|-------|--------|
+| `امار` / `آمار` | آمار امروز |
+| `اکو متن` | اکو + حذف پیام اصلی در صورت داشتن permission |
+| `یاد بگیر trigger response` | یادگیری (Admin) |
+| `فراموش کن trigger` | حذف یادگیری |
+| `لیست یادگیری` | لیست triggerها |
+| Reply + `نجوا متن` | نجوا خصوصی |
+| `دوز` | شروع بازی دوز |
+| `/ban USER_ID` یا Reply+/ban | بن |
+| `/kick ...` | کیک |
+| `/unban ...` | آنبن |
 
-## GitHub
+Private: `/start` یا `منو` → منوی اینلاین
 
-Never commit:
+Owner private: `بکاپ`
 
-- live bot tokens
-- private database passwords
-- private Railway connection URLs
-- generated backups
+## Production Checklist
+
+- [ ] BOT_TOKEN از BotFather جدید گرفته شده (توکن قبلی revoke)
+- [ ] DATABASE_URL فقط در Railway Variables
+- [ ] ربات در گروه Admin است و can_delete_messages / can_restrict_members دارد
+- [ ] Group ID درست است
+- [ ] Worker روی Railway در حال اجراست
+- [ ] لاگ‌ها بدون secret هستند
+
+## License
+
+Private project for @possibly group.

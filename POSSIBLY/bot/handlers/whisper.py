@@ -1,1 +1,2 @@
-"""Whisper UI requires a receiver-only interaction; Bale callback support is available, but message privacy semantics must be implemented carefully."""
+"""whisper feature — logic lives in dispatcher for cohesion; this module is kept for modular imports."""
+# Implementation is in bot.handlers.dispatcher to avoid circular imports and keep a single entry point.

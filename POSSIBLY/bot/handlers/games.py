@@ -1,1 +1,2 @@
-"""Game dispatch lives in dispatcher.py; engines are kept under bot/games."""
+"""games feature — logic lives in dispatcher for cohesion; this module is kept for modular imports."""
+# Implementation is in bot.handlers.dispatcher to avoid circular imports and keep a single entry point.
