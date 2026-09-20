@@ -1,4 +1,3 @@
-```python
 # POSSIBLY
 # Unified message formatting
 
@@ -44,4 +43,3 @@ def stats(text: str) -> str:
 
 def learning(text: str) -> str:
     return message(f"🧠 {text}")
-```
