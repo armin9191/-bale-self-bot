@@ -245,22 +245,59 @@ async def _learning(m: Message, gid: int, user: int, t: str) -> bool:
     return False
 
 
+def _norm_cmd(t: str) -> str:
+    """Normalize Persian/Arabic letters and spaces for command matching."""
+    if not t:
+        return ""
+    # Arabic kaf/yeh → Persian
+    t = t.replace("\u0643", "\u06a9").replace("\u064a", "\u06cc")
+    # zero-width / special spaces
+    for ch in ("\u200c", "\u200f", "\u200e", "\xa0", "\u200b"):
+        t = t.replace(ch, " ")
+    return " ".join(t.split())
+
+
 async def _echo(m: Message, t: str) -> bool:
-    if not t.startswith("اکو"):
+    nt = _norm_cmd(t)
+    # accept: اکو / اکو: / echo
+    if not (nt.startswith("اکو") or nt.lower().startswith("echo")):
         return False
-    payload = t[len("اکو"):].strip()
+    if nt.lower().startswith("echo"):
+        payload = nt[4:].strip().lstrip(":").strip()
+    else:
+        payload = nt[len("اکو"):].strip().lstrip(":").strip()
     if not payload:
-        await m.reply(error("بعد از اکو متن بنویس."))
+        await m.reply(error("بعد از اکو متن بنویس.\nمثال: اکو سلام"))
         return True
+    # Send FIRST (so user always sees the echo even if delete fails)
+    sent = False
+    try:
+        await m.reply(info(payload))
+        sent = True
+    except Exception as e1:
+        log.warning("echo reply failed: %s", e1)
+        try:
+            chat = getattr(m, "chat", None)
+            if chat is not None and hasattr(chat, "send"):
+                await chat.send(info(payload))
+                sent = True
+        except Exception as e2:
+            log.warning("echo chat.send failed: %s", e2)
+            bot = _get_bot(m)
+            if bot is not None:
+                try:
+                    await bot.send_message(_gid(m), info(payload))
+                    sent = True
+                except Exception as e3:
+                    log.warning("echo bot.send_message failed: %s", e3)
+    if not sent:
+        await m.reply(error("ارسال اکو ناموفق بود."))
+        return True
+    # Then try delete original (needs can_delete_messages)
     try:
         await m.delete()
-    except Exception:
-        pass
-    chat = getattr(m, "chat", None)
-    if chat is not None:
-        await chat.send(info(payload))
-    else:
-        await m.reply(info(payload))
+    except Exception as e:
+        log.info("echo delete skipped: %s", e)
     return True
 
 
