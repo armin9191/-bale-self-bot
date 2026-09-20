@@ -338,19 +338,21 @@ async def _gif(m: Message, t: str) -> bool:
             if not raw:
                 await m.reply(error("محتوای فایل نامعتبر."))
                 return True
-        out = process_gif(raw, caption)
+        # log magic for debug
+        head = bytes(raw[:16]) if raw else b""
+        log.info("downloaded head=%r len=%s", head, len(raw) if raw else 0)
+        out = process_gif(bytes(raw), caption)
         if not out:
             await m.reply(error("پردازش گیف ناموفق."))
             return True
-        tmp = Path("temp")
-        tmp.mkdir(exist_ok=True)
-        path = tmp / f"gif_{int(time.time())}.gif"
-        path.write_bytes(out)
+        # IMPORTANT: InputFile needs file BYTES, not a path string
+        media = InputFile(out, file_name="possibly.gif")
+        chat_id = getattr(getattr(m, "chat", None), "id", None) or _gid(m)
+        bot = _get_bot(m)
         sent = False
-        # Prefer message.reply_animation / reply_document
         try:
             if hasattr(m, "reply_animation"):
-                await m.reply_animation(InputFile(path.read_bytes() if False else str(path)))
+                await m.reply_animation(media)
                 sent = True
         except Exception as e0:
             log.warning("reply_animation failed: %s", e0)
@@ -358,33 +360,26 @@ async def _gif(m: Message, t: str) -> bool:
             try:
                 chat = getattr(m, "chat", None)
                 if chat is not None and hasattr(chat, "send_animation"):
-                    await chat.send_animation(InputFile(str(path)))
+                    await chat.send_animation(InputFile(out, file_name="possibly.gif"))
                     sent = True
             except Exception as e1:
                 log.warning("chat.send_animation failed: %s", e1)
+        if not sent and bot is not None:
+            try:
+                await bot.send_animation(chat_id, InputFile(out, file_name="possibly.gif"))
+                sent = True
+            except Exception as e3:
+                log.warning("bot.send_animation failed: %s", e3)
         if not sent:
             try:
                 if hasattr(m, "reply_document"):
-                    await m.reply_document(InputFile(str(path)))
+                    await m.reply_document(InputFile(out, file_name="possibly.gif"))
                     sent = True
-                elif getattr(m, "chat", None) is not None:
-                    await m.chat.send_document(InputFile(str(path)))
+                elif bot is not None:
+                    await bot.send_document(chat_id, InputFile(out, file_name="possibly.gif"))
                     sent = True
             except Exception as e2:
                 log.warning("send_document failed: %s", e2)
-        # last resort: bot.send_animation
-        if not sent:
-            bot = _get_bot(m)
-            if bot is not None:
-                try:
-                    await bot.send_animation(getattr(m.chat, "id", None) or _gid(m), InputFile(str(path)))
-                    sent = True
-                except Exception as e3:
-                    log.warning("bot.send_animation failed: %s", e3)
-        try:
-            path.unlink(missing_ok=True)
-        except Exception:
-            pass
         if not sent:
             await m.reply(error("ارسال گیف ناموفق بود."))
     except ValueError as e:
@@ -411,17 +406,42 @@ async def _do_backup(m: Message, user: int) -> None:
         await m.reply(error("ساخت بکاپ ناموفق بود."))
         return
     try:
-        if hasattr(m, "reply_document"):
-            await m.reply_document(path, caption="POSSIBLY DB Backup")
+        data = Path(path).read_bytes()
+        if not data:
+            await m.reply(error("فایل بکاپ خالی است."))
+            return
+        fname = Path(path).name
+        media = InputFile(data, file_name=fname)
+        chat_id = getattr(getattr(m, "chat", None), "id", None) or user
+        bot = _get_bot(m)
+        sent = False
+        try:
+            if hasattr(m, "reply_document"):
+                await m.reply_document(media, caption="POSSIBLY DB Backup (SQL)")
+                sent = True
+        except Exception as e1:
+            log.warning("reply_document backup: %s", e1)
+        if not sent and bot is not None:
+            try:
+                await bot.send_document(chat_id, media, caption="POSSIBLY DB Backup (SQL)")
+                sent = True
+            except Exception as e2:
+                log.warning("bot.send_document backup: %s", e2)
+        if not sent:
+            # last: try without caption
+            try:
+                if bot is not None:
+                    await bot.send_document(chat_id, InputFile(data, file_name=fname))
+                    sent = True
+            except Exception as e3:
+                log.warning("bot.send_document bare: %s", e3)
+        if sent:
+            await m.reply(success(f"بکاپ ارسال شد ({len(data)} بایت)."))
         else:
-            bot = _get_bot(m)
-            if bot:
-                await bot.send_document(getattr(m.chat, "id", None) or _gid(m), InputFile(path), caption="POSSIBLY DB Backup")
-            else:
-                await m.reply(success(f"فایل: {path}"))
+            await m.reply(error("ارسال فایل ناموفق. بکاپ ساخته شد ولی API بله فایل را نپذیرفت."))
     except Exception as e:
-        log.warning("send backup: %s", e)
-        await m.reply(error("ارسال فایل ناموفق. مسیر موقت ذخیره شد."))
+        log.exception("send backup")
+        await m.reply(error(f"خطا در ارسال بکاپ: {e}"))
     try:
         Path(path).unlink(missing_ok=True)
     except Exception:
