@@ -2,40 +2,33 @@
 # Central handler registration
 
 
-from __future__ import annotations
-
 import logging
 
-import bale
+from bot.handlers import admin
+from bot.handlers import echo
+from bot.handlers import games
+from bot.handlers import learning
+from bot.handlers import stats
+from bot.handlers import whisper
+from bot.handlers import gif
 
 
 logger = logging.getLogger("POSSIBLY.handlers")
 
 
-def register_handlers(bot: bale.Bot) -> None:
+def register_handlers(bot) -> None:
     """
     Register all POSSIBLY handlers.
 
-    Handler modules are imported here instead of keeping all
-    registrations inside main.py.
+    Each handler module owns its own Bale decorators/registration logic.
     """
 
-    from bot.handlers.admin import register as register_admin
-    from bot.handlers.learning import register as register_learning
-    from bot.handlers.stats import register as register_stats
-    from bot.handlers.echo import register as register_echo
-    from bot.handlers.whisper import register as register_whisper
-    from bot.handlers.gif import register as register_gif
-    from bot.handlers.games import register as register_games
-    from bot.handlers.backup import register as register_backup
+    admin.register(bot)
+    learning.register(bot)
+    stats.register(bot)
+    echo.register(bot)
+    whisper.register(bot)
+    gif.register(bot)
+    games.register(bot)
 
-    register_admin(bot)
-    register_learning(bot)
-    register_stats(bot)
-    register_echo(bot)
-    register_whisper(bot)
-    register_gif(bot)
-    register_games(bot)
-    register_backup(bot)
-
-    logger.info("Handler registry loaded")
+    logger.info("All POSSIBLY handlers registered")
