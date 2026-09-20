@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
-    BOT_TOKEN: str = "1266619413:auADLARdWSeTJQaA9dxuUc01oxee7L_BsNo"
+    BOT_TOKEN: str = "81087490:Ks2I1Rp6kzAiTsoYSCe1W9tPn3cJRH5LWaY"
     DATABASE_URL: str = "postgresql://postgres:cMNEnLwTdcfVuREgxJEbhxqzfUtwVjvM@postgres.railway.internal:5432/railway"
 
     ALLOWED_GROUP_ID: int = 4739068741
