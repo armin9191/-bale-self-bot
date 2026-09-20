@@ -1,168 +1,106 @@
 # POSSIBLY
-# Keyboard builders
+# Keyboard helpers
+#
+# این فایل فقط از قابلیت‌هایی استفاده می‌کند که در نسخه نصب‌شده
+# python-bale-bot واقعاً در دسترس هستند.
+#
+# Callback/Inline keyboard را بعد از تأیید API نسخه نصب‌شده
+# به handlerهای مربوط وصل می‌کنیم.
 
 from __future__ import annotations
 
-import bale
+from typing import Any
 
 
-def private_member_keyboard() -> bale.InlineKeyboardMarkup:
-    return bale.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                bale.InlineKeyboardButton(
-                    text="👤 پروفایل من",
-                    callback_data="profile",
-                ),
-                bale.InlineKeyboardButton(
-                    text="📊 آمار من",
-                    callback_data="my_stats",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="🎮 بازی‌ها",
-                    callback_data="games",
-                ),
-                bale.InlineKeyboardButton(
-                    text="ℹ️ درباره ربات",
-                    callback_data="about",
-                ),
-            ],
-        ]
-    )
+def button(text: str, **kwargs: Any) -> dict[str, Any]:
+    """
+    سازنده ساده برای نگهداری مشخصات دکمه.
+    تبدیل نهایی به keyboard object در لایه Bale انجام می‌شود.
+    """
+    return {
+        "text": text,
+        **kwargs,
+    }
 
 
-def private_admin_keyboard() -> bale.InlineKeyboardMarkup:
-    return bale.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                bale.InlineKeyboardButton(
-                    text="👥 اعضای گروه",
-                    callback_data="members",
-                ),
-                bale.InlineKeyboardButton(
-                    text="🛡 مدیریت",
-                    callback_data="admin",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="📊 آمار گروه",
-                    callback_data="group_stats",
-                ),
-                bale.InlineKeyboardButton(
-                    text="🧠 یادگیری",
-                    callback_data="learning",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="⚙️ تنظیمات",
-                    callback_data="settings",
-                ),
-                bale.InlineKeyboardButton(
-                    text="🎮 بازی‌ها",
-                    callback_data="games",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="📜 لاگ مدیریت",
-                    callback_data="moderation_logs",
-                ),
-            ],
-        ]
-    )
+def member_menu() -> list[list[dict[str, Any]]]:
+    return [
+        [
+            button("👤 پروفایل من"),
+            button("📊 آمار من"),
+        ],
+        [
+            button("🎮 بازی‌ها"),
+            button("ℹ️ درباره ربات"),
+        ],
+    ]
 
 
-def private_owner_keyboard() -> bale.InlineKeyboardMarkup:
-    return bale.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                bale.InlineKeyboardButton(
-                    text="👥 اعضای گروه",
-                    callback_data="members",
-                ),
-                bale.InlineKeyboardButton(
-                    text="🛡 مدیریت",
-                    callback_data="admin",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="📊 آمار گروه",
-                    callback_data="group_stats",
-                ),
-                bale.InlineKeyboardButton(
-                    text="🧠 یادگیری",
-                    callback_data="learning",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="⚙️ تنظیمات",
-                    callback_data="settings",
-                ),
-                bale.InlineKeyboardButton(
-                    text="🎮 بازی‌ها",
-                    callback_data="games",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="📜 لاگ مدیریت",
-                    callback_data="moderation_logs",
-                ),
-            ],
-            [
-                bale.InlineKeyboardButton(
-                    text="💾 بکاپ دیتابیس",
-                    callback_data="database_backup",
-                ),
-            ],
-        ]
-    )
+def admin_menu() -> list[list[dict[str, Any]]]:
+    return [
+        [
+            button("👥 اعضای گروه"),
+            button("🛡 مدیریت"),
+        ],
+        [
+            button("📊 آمار گروه"),
+            button("🧠 یادگیری"),
+        ],
+        [
+            button("⚙️ تنظیمات"),
+            button("🎮 بازی‌ها"),
+        ],
+        [
+            button("📜 لاگ مدیریت"),
+        ],
+    ]
 
 
-def whisper_keyboard(
-    whisper_id: int,
-) -> bale.InlineKeyboardMarkup:
-    return bale.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                bale.InlineKeyboardButton(
-                    text="👁 مشاهده نجوا",
-                    callback_data=f"whisper:{whisper_id}",
-                )
-            ]
-        ]
-    )
+def owner_menu() -> list[list[dict[str, Any]]]:
+    return [
+        [
+            button("👥 اعضای گروه"),
+            button("🛡 مدیریت"),
+        ],
+        [
+            button("📊 آمار گروه"),
+            button("🧠 یادگیری"),
+        ],
+        [
+            button("⚙️ تنظیمات"),
+            button("🎮 بازی‌ها"),
+        ],
+        [
+            button("📜 لاگ مدیریت"),
+            button("💾 بکاپ"),
+        ],
+    ]
 
 
-def tic_tac_toe_keyboard(
+def tic_tac_toe_board(
     board: list[str | None],
-) -> bale.InlineKeyboardMarkup:
-    buttons = []
+) -> list[list[dict[str, Any]]]:
+    """
+    صفحه دوز.
 
-    for row in range(3):
-        current_row = []
+    مقدار هر خانه به‌صورت جداگانه نگهداری می‌شود تا handler
+    بتواند آن را به keyboard واقعی Bale تبدیل کند.
+    """
+    rows: list[list[dict[str, Any]]] = []
 
-        for column in range(3):
-            position = row * 3 + column
-            value = board[position]
+    for start in (0, 3, 6):
+        row: list[dict[str, Any]] = []
 
-            text = value if value else str(position + 1)
+        for index in range(start, start + 3):
+            value = board[index] or str(index + 1)
 
-            current_row.append(
-                bale.InlineKeyboardButton(
-                    text=text,
-                    callback_data=f"ttt:{position}",
+            row.append(
+                button(
+                    value,
+                    callback_data=f"ttt:{index}",
                 )
             )
 
-        buttons.append(current_row)
+        rows.append(row)
 
-    return bale.InlineKeyboardMarkup(
-        inline_keyboard=buttons
-    )
+    return rows
