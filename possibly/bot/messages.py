@@ -4,13 +4,13 @@
 
 HEADER = (
     "╭━━━━━━━━━━━━━━━╮\n"
-    "│  POSSIBLY\n"
+    "│ ⚔️ POSSIBLY\n"
     "╰━━━━━━━━━━━━━━━╯"
 )
 
 
 def message(text: str) -> str:
-    return f"{HEADER}\n{text}"
+    return f"{HEADER}\n\n{text}"
 
 
 def success(text: str) -> str:
@@ -30,7 +30,7 @@ def info(text: str) -> str:
 
 
 def admin(text: str) -> str:
-    return message(f"🛡️ {text}")
+    return message(f"🛡 {text}")
 
 
 def game(text: str) -> str:
