@@ -14,7 +14,7 @@ from config import settings
 from bot.messages import info, error, success, help_text
 from bot.permissions import is_special_admin, is_owner, live_role, Role
 from bot.keyboards import (
-    private_menu, ttt_keyboard, whisper_keyboard,
+    private_menu, ttt_keyboard, whisper_keyboard, whisper_open_keyboard,
     mafia_lobby_keyboard, tod_lobby_keyboard, tod_choice_keyboard,
 )
 from database.repositories import (
@@ -670,25 +670,59 @@ async def on_callback(cb: CallbackQuery) -> None:
     if data == "do_backup":
         return await _do_backup(msg, user)
 
-    if data.startswith("whisper:"):
+    # Whisper view — only receiver (or sender); no PM; non-receivers get silence
+    if data.startswith("whisper:") or data.startswith("whisper_ok:"):
         try:
             wid = int(data.split(":")[1])
         except Exception:
             return
         w = await get_whisper(wid)
         if not w:
-            return await msg.reply(error("نجوا پیدا نشد."))
-        if user not in (int(w["receiver_id"]), int(w["sender_id"])):
-            return await msg.reply(error("برای شما نیست."))
+            # silent — no public error for others
+            return
+        allowed = {int(w["receiver_id"]), int(w["sender_id"])}
+        if user not in allowed:
+            # silent — never post "برای شما نیست" in the group
+            return
         exp = w.get("expires_at")
-        if exp and exp.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-            return await msg.reply(error("منقضی شده."))
-        await mark_whisper_viewed(wid)
-        text = w["encrypted_or_private_content"]
+        if exp is not None:
+            try:
+                exp_aware = exp if getattr(exp, "tzinfo", None) else exp.replace(tzinfo=timezone.utc)
+                if exp_aware < datetime.now(timezone.utc):
+                    try:
+                        await msg.edit(info("⏱ این نجوا منقضی شده است."))
+                    except Exception:
+                        pass
+                    return
+            except Exception:
+                pass
+
+        if data.startswith("whisper_ok:"):
+            # Close / dismiss content
+            await mark_whisper_viewed(wid)
+            try:
+                await msg.edit(info("✓ نجوا مشاهده و بسته شد."))
+            except Exception:
+                pass
+            return
+
+        # Open: show content in the same message + OK button (not PM)
+        body = w["encrypted_or_private_content"]
         try:
-            await cb.from_user.send(info(f"نجوا:\n\n{text}"))
-        except Exception:
-            await msg.reply(info(f"نجوا:\n\n{text}"))
+            await msg.edit(
+                info(f"🔒 نجوا\n\n{body}\n\nبرای بستن روی OK بزن."),
+                components=whisper_open_keyboard(wid),
+            )
+        except Exception as e:
+            log.warning("whisper open edit failed: %s", e)
+            # last resort: still avoid PM; reply only to this interaction context if edit impossible
+            try:
+                await msg.reply(
+                    info(f"🔒 نجوا\n\n{body}\n\nبرای بستن روی OK بزن."),
+                    components=whisper_open_keyboard(wid),
+                )
+            except Exception:
+                pass
         return
 
     # TTT

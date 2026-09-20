@@ -38,6 +38,13 @@ def whisper_keyboard(wid: int) -> InlineKeyboardMarkup:
     return kb
 
 
+def whisper_open_keyboard(wid: int) -> InlineKeyboardMarkup:
+    """Shown after receiver opens the whisper — OK closes it."""
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("✅ OK", callback_data=f"whisper_ok:{wid}"), row=1)
+    return kb
+
+
 def mafia_lobby_keyboard() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("➕ پیوستن", callback_data="mafia:join"), row=1)
