@@ -302,17 +302,24 @@ async def _gif(m: Message, t: str) -> bool:
         tmp.mkdir(exist_ok=True)
         path = tmp / f"gif_{int(time.time())}.gif"
         path.write_bytes(out)
+        sent = False
         try:
-            await m.chat.send_animation(InputFile(str(path)), caption=info(caption)[:200] if False else None)
-        except Exception:
-            # fallback: send as document
-            if hasattr(m, "reply_document"):
-                await m.reply_document(str(path))
-            else:
-                await m.chat.send_document(InputFile(str(path)))
+            await m.chat.send_animation(InputFile(str(path)))
+            sent = True
+        except Exception as e1:
+            log.warning("send_animation failed: %s", e1)
+            try:
+                if hasattr(m, "reply_document"):
+                    await m.reply_document(str(path), caption="گیف POSSIBLY")
+                else:
+                    await m.chat.send_document(InputFile(str(path)))
+                sent = True
+            except Exception as e2:
+                log.warning("send_document failed: %s", e2)
         finally:
             path.unlink(missing_ok=True)
-        await m.reply(success("گیف با متن ساخته شد."))
+        if not sent:
+            await m.reply(error("ارسال گیف ناموفق بود."))
     except ValueError as e:
         await m.reply(error(str(e)))
     except Exception as e:
@@ -356,10 +363,13 @@ async def _do_backup(m: Message, user: int) -> None:
 
 async def _private(m: Message, user: int, t: str) -> None:
     low = t.lower().strip()
-    if low in ("", "/start", "start", "منو", "menu", "راهنما", "help"):
+    if low in ("راهنما", "help", "دستورات"):
+        await m.reply(help_text())
         role = Role.OWNER if is_owner(user) else (Role.ADMIN if is_special_admin(user) else Role.MEMBER)
-        if low in ("راهنما", "help"):
-            await m.reply(help_text())
+        await m.reply(info(f"منوی خصوصی\nسطح: {role.value}"), components=private_menu(role))
+        return
+    if low in ("", "/start", "start", "منو", "menu"):
+        role = Role.OWNER if is_owner(user) else (Role.ADMIN if is_special_admin(user) else Role.MEMBER)
         await m.reply(info(f"منوی خصوصی\nسطح: {role.value}"), components=private_menu(role))
         return
     if low in ("بکاپ", "/backup", "backup") and (is_owner(user) or user == settings.POSSIBLY_ADMIN_ID):
@@ -410,6 +420,8 @@ async def on_message(m: Message) -> None:
         return
     if t in ("آمار", "امار"):
         return await _show_stats(m, gid)
+    if t in ("راهنما", "help", "دستورات"):
+        return await m.reply(help_text())
     if await _echo(m, t):
         return
     if await _whisper(m, gid, user, t):
@@ -430,6 +442,91 @@ async def on_message(m: Message) -> None:
             info("🕵️ مافیا — لابی\nحداقل ۴ نفر. سازنده شروع را بزند."),
             components=mafia_lobby_keyboard(),
         )
+    # Mafia phase helpers (creator)
+    if t.startswith("پایان شب") or t.startswith("روز مافیا"):
+        st = MAFIA.get(gid)
+        if not st or user != st.get("creator_id"):
+            return await m.reply(error("فقط سازنده بازی می‌تواند فاز را عوض کند."))
+        if st.get("phase") != MafiaPhase.NIGHT.value:
+            return await m.reply(error("الان شب نیست."))
+        st["phase"] = MafiaPhase.DAY.value
+        alive_n = len(st.get("alive") or [])
+        return await m.reply(info(
+            f"☀️ روز {st.get('day', 1)}\nزنده: {alive_n}\n"
+            "بحث کنید. سازنده با «رای گیری» رأی را شروع کند.\n"
+            "یا «اعدام USER_ID» برای اعدام مستقیم."
+        ))
+    if t.startswith("رای گیری") or t.startswith("رأی گیری"):
+        st = MAFIA.get(gid)
+        if not st or user != st.get("creator_id"):
+            return await m.reply(error("فقط سازنده."))
+        st["phase"] = MafiaPhase.VOTING.value
+        st["votes"] = {}
+        return await m.reply(info(
+            "🗳️ رأی‌گیری شروع شد.\nهر کس بنویسد: رای USER_ID\n"
+            "سازنده در پایان «پایان رای» بزند."
+        ))
+    if t.startswith("رای ") or t.startswith("رأی "):
+        st = MAFIA.get(gid)
+        if not st or st.get("phase") != MafiaPhase.VOTING.value:
+            return False
+        if user not in (st.get("alive") or []):
+            return await m.reply(error("شما زنده نیستید."))
+        parts = t.split()
+        try:
+            target = int(parts[1])
+        except Exception:
+            return await m.reply(error("فرمت: رای USER_ID"))
+        if target not in (st.get("alive") or []):
+            return await m.reply(error("هدف زنده نیست."))
+        st.setdefault("votes", {})[str(user)] = target
+        return await m.reply(success(f"رأی شما ثبت شد → {target}"))
+    if t.startswith("پایان رای") or t.startswith("پایان رأی"):
+        st = MAFIA.get(gid)
+        if not st or user != st.get("creator_id"):
+            return await m.reply(error("فقط سازنده."))
+        votes = st.get("votes") or {}
+        if not votes:
+            return await m.reply(error("رأیی ثبت نشده."))
+        from collections import Counter
+        cnt = Counter(votes.values())
+        target, n = cnt.most_common(1)[0]
+        alive = st.get("alive") or []
+        if target in alive:
+            alive = [p for p in alive if p != target]
+            st["alive"] = alive
+        st["votes"] = {}
+        win = check_win(st)
+        if win:
+            st["phase"] = MafiaPhase.ENDED.value
+            st["winner"] = win
+            MAFIA.pop(gid, None)
+            return await m.reply(info(f"☠️ اعدام: {target}\n🏆 برنده: {win}"))
+        st["phase"] = MafiaPhase.NIGHT.value
+        st["day"] = int(st.get("day") or 1) + 1
+        return await m.reply(info(
+            f"☠️ اعدام شد: {target} ({n} رأی)\nزنده: {len(st['alive'])}\n🌙 شب {st['day']}"
+        ))
+    if t.startswith("اعدام "):
+        st = MAFIA.get(gid)
+        if not st or user != st.get("creator_id"):
+            return await m.reply(error("فقط سازنده."))
+        try:
+            target = int(t.split()[1])
+        except Exception:
+            return await m.reply(error("فرمت: اعدام USER_ID"))
+        alive = st.get("alive") or []
+        if target not in alive:
+            return await m.reply(error("هدف زنده نیست."))
+        st["alive"] = [p for p in alive if p != target]
+        win = check_win(st)
+        if win:
+            st["phase"] = MafiaPhase.ENDED.value
+            MAFIA.pop(gid, None)
+            return await m.reply(info(f"☠️ اعدام: {target}\n🏆 برنده: {win}"))
+        st["phase"] = MafiaPhase.NIGHT.value
+        st["day"] = int(st.get("day") or 1) + 1
+        return await m.reply(info(f"☠️ اعدام: {target}\nزنده: {len(st['alive'])}\n🌙 شب {st['day']}"))
     if t in ("جرعت حقیقت", "جرأت حقیقت", "شروع جرعت و حقیقت", "جرعت و حقیقت"):
         TOD[gid] = tod_new(user)
         return await m.reply(
