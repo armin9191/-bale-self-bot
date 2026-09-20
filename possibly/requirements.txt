@@ -1,0 +1,5 @@
+﻿python-bale-bot==2.5.0
+asyncpg
+Pillow
+arabic-reshaper
+python-bidi
