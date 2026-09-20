@@ -29,6 +29,7 @@ from bot.games.mafia import new_state as mafia_new, assign_roles, check_win, Pha
 from bot.games.truth_dare import new_state as tod_new, pick as tod_pick
 from bot.handlers.backup import create_backup
 from bot.handlers.gif import process_gif
+from bot.bale_api import answer_callback_query
 
 log = logging.getLogger("POSSIBLY.dispatcher")
 
@@ -670,59 +671,62 @@ async def on_callback(cb: CallbackQuery) -> None:
     if data == "do_backup":
         return await _do_backup(msg, user)
 
-    # Whisper view — only receiver (or sender); no PM; non-receivers get silence
+    # Whisper: private alert popup via answerCallbackQuery (only that user sees it)
     if data.startswith("whisper:") or data.startswith("whisper_ok:"):
+        cb_id = getattr(cb, "id", None) or getattr(cb, "callback_id", None)
         try:
             wid = int(data.split(":")[1])
         except Exception:
+            if cb_id:
+                await answer_callback_query(cb_id, show_alert=False)
             return
+
         w = await get_whisper(wid)
         if not w:
-            # silent — no public error for others
+            if cb_id:
+                await answer_callback_query(cb_id, "نجوا دیگر در دسترس نیست.", show_alert=True)
             return
+
         allowed = {int(w["receiver_id"]), int(w["sender_id"])}
         if user not in allowed:
-            # silent — never post "برای شما نیست" in the group
+            # private alert only for the clicker — nothing in the group chat
+            if cb_id:
+                await answer_callback_query(cb_id, "این نجوا برای شما نیست.", show_alert=True)
             return
+
         exp = w.get("expires_at")
         if exp is not None:
             try:
                 exp_aware = exp if getattr(exp, "tzinfo", None) else exp.replace(tzinfo=timezone.utc)
                 if exp_aware < datetime.now(timezone.utc):
-                    try:
-                        await msg.edit(info("⏱ این نجوا منقضی شده است."))
-                    except Exception:
-                        pass
+                    if cb_id:
+                        await answer_callback_query(cb_id, "این نجوا منقضی شده است.", show_alert=True)
                     return
             except Exception:
                 pass
 
         if data.startswith("whisper_ok:"):
-            # Close / dismiss content
             await mark_whisper_viewed(wid)
-            try:
-                await msg.edit(info("✓ نجوا مشاهده و بسته شد."))
-            except Exception:
-                pass
+            if cb_id:
+                await answer_callback_query(cb_id, "بسته شد.", show_alert=False)
             return
 
-        # Open: show content in the same message + OK button (not PM)
-        body = w["encrypted_or_private_content"]
-        try:
-            await msg.edit(
-                info(f"🔒 نجوا\n\n{body}\n\nبرای بستن روی OK بزن."),
-                components=whisper_open_keyboard(wid),
-            )
-        except Exception as e:
-            log.warning("whisper open edit failed: %s", e)
-            # last resort: still avoid PM; reply only to this interaction context if edit impossible
-            try:
-                await msg.reply(
-                    info(f"🔒 نجوا\n\n{body}\n\nبرای بستن روی OK بزن."),
-                    components=whisper_open_keyboard(wid),
-                )
-            except Exception:
-                pass
+        body = (w.get("encrypted_or_private_content") or "").strip()
+        # Bale alert text limit ~200 chars
+        if len(body) > 180:
+            shown = body[:177] + "…"
+        else:
+            shown = body
+        alert_text = f"🔒 نجوا\n\n{shown}"
+        ok = False
+        if cb_id:
+            ok = await answer_callback_query(cb_id, alert_text, show_alert=True)
+        if ok:
+            await mark_whisper_viewed(wid)
+        else:
+            # API failed — still never post content to group
+            if cb_id:
+                await answer_callback_query(cb_id, "نمایش نجوا ناموفق بود.", show_alert=True)
         return
 
     # TTT

@@ -4,3 +4,4 @@ Pillow>=10,<12
 arabic-reshaper>=3,<4
 python-bidi>=0.4,<1
 imageio-ffmpeg>=0.5,<1
+aiohttp>=3.8,<4
