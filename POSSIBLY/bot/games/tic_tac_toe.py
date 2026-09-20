@@ -1,7 +1,5 @@
-"""Tic-Tac-Toe pure game engine (no Bale dependency)."""
 from __future__ import annotations
-
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -14,7 +12,7 @@ class TicTacToe:
 
     @classmethod
     def new(cls, x: int, o: int = 0) -> "TicTacToe":
-        return cls(board=[None] * 9, x=x, o=o)
+        return cls([None] * 9, x, o)
 
     def move(self, pos: int) -> bool:
         if not 0 <= pos < 9 or self.board[pos] is not None:
@@ -24,21 +22,14 @@ class TicTacToe:
         return True
 
     def winner(self) -> Optional[str]:
-        lines = (
-            (0, 1, 2), (3, 4, 5), (6, 7, 8),
-            (0, 3, 6), (1, 4, 7), (2, 5, 8),
-            (0, 4, 8), (2, 4, 6),
-        )
-        for a, b, c in lines:
+        for a, b, c in ((0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)):
             if self.board[a] and self.board[a] == self.board[b] == self.board[c]:
                 return self.board[a]
-        if all(self.board):
-            return "draw"
-        return None
+        return "draw" if all(self.board) else None
 
-    def to_dict(self) -> dict:
-        return {"board": self.board, "x": self.x, "o": self.o, "turn": self.turn}
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "TicTacToe":
-        return cls(board=d["board"], x=d["x"], o=d["o"], turn=d.get("turn", "X"))
+    def board_text(self) -> str:
+        rows = []
+        for r in range(3):
+            cells = [self.board[r * 3 + c] or "·" for c in range(3)]
+            rows.append(" | ".join(cells))
+        return "\n".join(rows)
