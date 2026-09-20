@@ -1,4 +1,5 @@
-﻿# POSSIBLY
+```python
+# POSSIBLY
 # Python 3.12+
 
 from dataclasses import dataclass
@@ -6,31 +7,79 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
-    BOT_TOKEN: str
-    DATABASE_URL: str
-    ALLOWED_GROUP_ID: int
-    ALLOWED_GROUP_USERNAME: str
-    OWNER_ID: int
-    POSSIBLY_ADMIN_ID: int
+    # ============================================================
+    # Bale Bot
+    # ============================================================
 
+    BOT_TOKEN: str = (
+        "1266619413:auADLARw9eTJbWSeTJQaA9dxuUc01oxee7L_BsNo"
+    )
 
-settings = Settings(
-    # توکن ربات بله
-    BOT_TOKEN="1266619413:auADLARdWSeTJQaA9dxuUc01oxee7L_BsNo",
+    # ============================================================
+    # PostgreSQL
+    # ============================================================
+    #
+    # این آدرس Railway Internal است.
+    # برای اجرای Bot داخل Railway مناسب است.
+    #
+    # برای اجرای Local روی Windows باید بعداً Public DB URL
+    # را جایگزین کنیم.
+    #
 
-    # آدرس PostgreSQL
-    DATABASE_URL="postgresql://postgres:cMNEnLwTdcfVuREgxJEbhxqzfUtwVjvM@postgres.railway.internal:5432/railway",
+    DATABASE_URL: str = (
+        "postgresql://postgres:"
+        "cMNEnLwTdcfVuREgxJEbhxqzfUtwVjvM"
+        "@postgres.railway.internal:5432/railway"
+    )
 
-    # آیدی عددی گروه اصلی POSSIBLY
-    ALLOWED_GROUP_ID=4739068741,
+    # ============================================================
+    # Main Group
+    # ============================================================
 
-    # یوزرنیم گروه
-    ALLOWED_GROUP_USERNAME="@possibly",
+    ALLOWED_GROUP_ID: int = 4739068741
+
+    ALLOWED_GROUP_USERNAME: str = "@possibly"
+
+    # ============================================================
+    # Permissions
+    # ============================================================
 
     # Owner اصلی
-    OWNER_ID=1967315238,
+    OWNER_ID: int = 1967315238
 
-    # ادمین اختصاصی POSSIBLY
-    # امکان دریافت بکاپ از طریق Private Chat
-    POSSIBLY_ADMIN_ID=1967315238,
-)
+    # Admin اختصاصی POSSIBLY
+    # این کاربر می‌تواند از Private Chat درخواست Backup کند.
+    POSSIBLY_ADMIN_ID: int = 1967315238
+
+    # ============================================================
+    # Limits / Safety
+    # ============================================================
+
+    # حداکثر تعداد یادگیری برای هر گروه
+    MAX_LEARNED_WORDS: int = 300
+
+    # حداکثر نجوا در دقیقه برای هر کاربر
+    MAX_WHISPERS_PER_MINUTE: int = 5
+
+    # حداکثر حجم GIF
+    MAX_GIF_SIZE_MB: int = 10
+
+    # حداکثر تعداد فریم GIF متحرک
+    MAX_GIF_FRAMES: int = 80
+
+    # Timeout بازی‌ها
+    GAME_TIMEOUT_SECONDS: int = 1800
+
+    # ============================================================
+    # Backup
+    # ============================================================
+
+    # فقط این User ID اجازه دریافت Backup دارد.
+    BACKUP_ADMIN_ID: int = 1967315238
+
+    # نام فایل Backup
+    BACKUP_FILENAME_PREFIX: str = "possibly_backup"
+
+
+settings = Settings()
+```
