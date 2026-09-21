@@ -784,7 +784,63 @@ async def _try_auto_reply(m: Message, gid: int, t: str) -> bool:
     return True
 
 
+def _is_allowed_group(gid: int) -> bool:
+    allowed = int(settings.ALLOWED_GROUP_ID)
+    try:
+        g = int(gid)
+    except Exception:
+        return False
+    if g == allowed:
+        return True
+    # tolerate sign / wrapper differences some platforms use
+    if abs(g) == abs(allowed):
+        return True
+    return False
+
+
+def _is_bot_message(m: Message, bot_ref) -> bool:
+    """Ignore the bot's own messages (critical when bot is group admin)."""
+    user = _uid(m)
+    if user is None:
+        return True
+    # explicit bot flag on user if present
+    au = getattr(m, "author", None) or getattr(m, "from_user", None)
+    if au is not None and bool(getattr(au, "is_bot", False)):
+        return True
+    if bot_ref is not None:
+        bu = getattr(bot_ref, "user", None) or getattr(bot_ref, "me", None)
+        if bu is not None and getattr(bu, "id", None) is not None:
+            try:
+                if int(user) == int(bu.id):
+                    return True
+            except Exception:
+                pass
+        # token prefix is often bot id
+        try:
+            token = getattr(settings, "BOT_TOKEN", "") or ""
+            bot_id = int(token.split(":", 1)[0])
+            if int(user) == bot_id:
+                return True
+        except Exception:
+            pass
+    return False
+
+
 async def on_message(m: Message) -> None:
+    """Main group/private router. Hardened for when the bot is group admin."""
+    try:
+        await _on_message_inner(m)
+    except Exception:
+        log.exception("on_message fatal")
+
+
+async def _on_message_inner(m: Message) -> None:
+    bot_ref = _get_bot(m)
+
+    # When bot is admin it often receives its own outgoing messages → must skip
+    if _is_bot_message(m, bot_ref):
+        return
+
     user = _uid(m)
     if user is None:
         return
@@ -794,32 +850,57 @@ async def on_message(m: Message) -> None:
     if _is_private(m, gid, user):
         return await _private(m, user, t)
 
-    if gid != settings.ALLOWED_GROUP_ID:
-        return await m.reply(info("این ربات فقط برای گروه مجاز فعال است."))
+    if not _is_allowed_group(gid):
+        # silent ignore other groups (do not reply — avoids errors/spam when admin in many chats)
+        log.debug("ignore group id=%s (allowed=%s)", gid, settings.ALLOWED_GROUP_ID)
+        return
 
     if not _rate_ok(user):
         return
 
+    # Prefer configured allowed id for DB keys
+    gid = int(settings.ALLOWED_GROUP_ID)
+
     if await _locks_cmd(m, gid, user, t):
         return
 
-    bot_ref = _get_bot(m)
-    if await check_group_lock(m, gid, user):
-        return
-    if await check_mute(m, gid, user):
-        return
-    if await check_force_join(m, gid, user, bot_ref):
-        return
+    # Each guard isolated so one DB/API failure does not kill the whole handler
+    try:
+        if await check_group_lock(m, gid, user):
+            return
+    except Exception:
+        log.exception("check_group_lock")
+    try:
+        if await check_mute(m, gid, user):
+            return
+    except Exception:
+        log.exception("check_mute")
+    try:
+        if await check_force_join(m, gid, user, bot_ref):
+            return
+    except Exception:
+        log.exception("check_force_join")
+    try:
+        if await _enforce_locks(m, gid, user, t):
+            return
+    except Exception:
+        log.exception("enforce_locks")
 
-    if await _enforce_locks(m, gid, user, t):
-        return
-
-    if await process_moderation_features(m, gid, user, t, bot_ref):
-        return
-    if await _auto_reply_cmd(m, gid, user, t):
-        return
-    if await process_extra(m, gid, user, t, bot_ref):
-        return
+    try:
+        if await process_moderation_features(m, gid, user, t, bot_ref):
+            return
+    except Exception:
+        log.exception("moderation_features")
+    try:
+        if await _auto_reply_cmd(m, gid, user, t):
+            return
+    except Exception:
+        log.exception("auto_reply_cmd")
+    try:
+        if await process_extra(m, gid, user, t, bot_ref):
+            return
+    except Exception:
+        log.exception("process_extra")
 
     try:
         await _record_stats(m, gid, user)
