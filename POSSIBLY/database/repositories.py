@@ -648,3 +648,145 @@ async def get_force_join(group_id: int) -> str | None:
     return await get_pool().fetchval(
         "SELECT channel_id FROM force_join WHERE group_id=$1", group_id
     )
+
+
+# ---------- group lock ----------
+async def get_group_lock(group_id: int) -> dict:
+    row = await get_pool().fetchrow(
+        "SELECT locked, until_ts, daily_start, daily_end FROM group_lock_state WHERE group_id=$1",
+        group_id,
+    )
+    if not row:
+        return {"locked": False, "until_ts": None, "daily_start": None, "daily_end": None}
+    return dict(row)
+
+
+async def set_group_lock_manual(group_id: int, locked: bool, by: int, until_ts=None) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_lock_state(group_id, locked, until_ts, set_by, updated_at)
+        VALUES($1,$2,$3,$4,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET locked=EXCLUDED.locked, until_ts=EXCLUDED.until_ts, set_by=EXCLUDED.set_by, updated_at=NOW()""",
+        group_id, locked, until_ts, by,
+    )
+
+
+async def set_group_lock_daily(group_id: int, start: str, end: str, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_lock_state(group_id, locked, daily_start, daily_end, set_by, updated_at)
+        VALUES($1,FALSE,$2,$3,$4,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET daily_start=EXCLUDED.daily_start, daily_end=EXCLUDED.daily_end,
+            set_by=EXCLUDED.set_by, updated_at=NOW()""",
+        group_id, start, end, by,
+    )
+
+
+async def clear_group_lock_daily(group_id: int) -> None:
+    await get_pool().execute(
+        "UPDATE group_lock_state SET daily_start=NULL, daily_end=NULL WHERE group_id=$1",
+        group_id,
+    )
+
+
+# ---------- mute records (richer) ----------
+async def set_mute_full(group_id: int, user_id: int, until_ts, by: int, reason: str | None = None) -> None:
+    await get_pool().execute(
+        """INSERT INTO mute_records(group_id, user_id, until_ts, reason, muted_by, created_at)
+        VALUES($1,$2,$3,$4,$5,NOW())
+        ON CONFLICT(group_id, user_id) DO UPDATE
+        SET until_ts=EXCLUDED.until_ts, reason=COALESCE(EXCLUDED.reason, mute_records.reason),
+            muted_by=EXCLUDED.muted_by, created_at=NOW()""",
+        group_id, user_id, until_ts, reason, by,
+    )
+    # keep legacy table in sync
+    await set_mute(group_id, user_id, until_ts, by)
+
+
+async def clear_mute_full(group_id: int, user_id: int) -> None:
+    await get_pool().execute(
+        "DELETE FROM mute_records WHERE group_id=$1 AND user_id=$2", group_id, user_id
+    )
+    await clear_mute(group_id, user_id)
+
+
+async def list_mutes(group_id: int) -> list[dict]:
+    rows = await get_pool().fetch(
+        "SELECT user_id, until_ts, reason, muted_by FROM mute_records WHERE group_id=$1 ORDER BY created_at DESC",
+        group_id,
+    )
+    return [dict(r) for r in rows]
+
+
+async def clear_all_mutes(group_id: int) -> int:
+    r = await get_pool().execute("DELETE FROM mute_records WHERE group_id=$1", group_id)
+    await get_pool().execute("DELETE FROM user_mutes WHERE group_id=$1", group_id)
+    try:
+        return int(r.split()[-1])
+    except Exception:
+        return 0
+
+
+async def get_mute_full(group_id: int, user_id: int):
+    row = await get_pool().fetchrow(
+        "SELECT until_ts, reason, muted_by FROM mute_records WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    if row:
+        return dict(row)
+    row2 = await get_mute(group_id, user_id)
+    return dict(row2) if row2 else None
+
+
+# ---------- warnings rich ----------
+async def set_max_warns(group_id: int, n: int, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO warn_settings(group_id, max_warns, updated_by)
+        VALUES($1,$2,$3)
+        ON CONFLICT(group_id) DO UPDATE SET max_warns=EXCLUDED.max_warns, updated_by=EXCLUDED.updated_by""",
+        group_id, n, by,
+    )
+
+
+async def get_max_warns(group_id: int) -> int:
+    v = await get_pool().fetchval("SELECT max_warns FROM warn_settings WHERE group_id=$1", group_id)
+    return int(v or 3)
+
+
+async def add_warn_record(group_id: int, user_id: int, by: int, reason: str | None = None) -> int:
+    await get_pool().execute(
+        "INSERT INTO warn_records(group_id, user_id, reason, by_user) VALUES($1,$2,$3,$4)",
+        group_id, user_id, reason, by,
+    )
+    return await add_warning(group_id, user_id)
+
+
+async def remove_one_warn(group_id: int, user_id: int) -> int:
+    c = await get_warnings(group_id, user_id)
+    if c <= 0:
+        return 0
+    new_c = c - 1
+    if new_c <= 0:
+        await clear_warnings(group_id, user_id)
+        return 0
+    await get_pool().execute(
+        "UPDATE user_warnings SET count=$3 WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id, new_c,
+    )
+    return new_c
+
+
+async def list_warns(group_id: int) -> list[dict]:
+    rows = await get_pool().fetch(
+        "SELECT user_id, count FROM user_warnings WHERE group_id=$1 AND count>0 ORDER BY count DESC",
+        group_id,
+    )
+    return [dict(r) for r in rows]
+
+
+async def clear_all_warns(group_id: int) -> int:
+    r = await get_pool().execute("DELETE FROM user_warnings WHERE group_id=$1", group_id)
+    try:
+        return int(r.split()[-1])
+    except Exception:
+        return 0

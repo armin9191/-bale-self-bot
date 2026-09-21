@@ -182,6 +182,39 @@ CREATE TABLE IF NOT EXISTS force_join (
     set_by BIGINT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS group_lock_state (
+    group_id BIGINT PRIMARY KEY,
+    locked BOOLEAN NOT NULL DEFAULT FALSE,
+    until_ts TIMESTAMPTZ,
+    daily_start TEXT,
+    daily_end TEXT,
+    set_by BIGINT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS mute_records (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    until_ts TIMESTAMPTZ,
+    reason TEXT,
+    muted_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS warn_settings (
+    group_id BIGINT PRIMARY KEY,
+    max_warns INTEGER NOT NULL DEFAULT 3,
+    action TEXT NOT NULL DEFAULT 'kick',
+    updated_by BIGINT
+);
+CREATE TABLE IF NOT EXISTS warn_records (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    reason TEXT,
+    by_user BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 

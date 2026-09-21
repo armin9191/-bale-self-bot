@@ -36,6 +36,9 @@ from bot.handlers.extra_features import (
     process_extra, handle_asl_callback, handle_panel_callback,
     check_force_join, check_mute,
 )
+from bot.handlers.moderation_features import (
+    process_moderation_features, check_group_lock,
+)
 from database.repositories import is_special_user, get_personal_locks
 from bot.locks import (
     LOCK_LABELS, resolve_lock_key, detect_violation, format_locks_status,
@@ -529,6 +532,8 @@ async def _private(m: Message, user: int, t: str) -> None:
     # locks from private (admin) → apply to allowed group
     if await _locks_cmd(m, settings.ALLOWED_GROUP_ID, user, t):
         return
+    if await process_moderation_features(m, settings.ALLOWED_GROUP_ID, user, t, _get_bot(m)):
+        return
     if await process_extra(m, settings.ALLOWED_GROUP_ID, user, t, _get_bot(m)):
         return
 
@@ -751,6 +756,8 @@ async def on_message(m: Message) -> None:
         return
 
     bot_ref = _get_bot(m)
+    if await check_group_lock(m, gid, user):
+        return
     if await check_mute(m, gid, user):
         return
     if await check_force_join(m, gid, user, bot_ref):
@@ -759,6 +766,8 @@ async def on_message(m: Message) -> None:
     if await _enforce_locks(m, gid, user, t):
         return
 
+    if await process_moderation_features(m, gid, user, t, bot_ref):
+        return
     if await process_extra(m, gid, user, t, bot_ref):
         return
 
