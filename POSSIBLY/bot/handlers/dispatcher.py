@@ -32,6 +32,11 @@ from bot.games.truth_dare import new_state as tod_new, pick as tod_pick
 from bot.handlers.backup import create_backup
 from bot.handlers.gif import process_gif
 from bot.bale_api import answer_callback_query
+from bot.handlers.extra_features import (
+    process_extra, handle_asl_callback, handle_panel_callback,
+    check_force_join, check_mute,
+)
+from database.repositories import is_special_user, get_personal_locks
 from bot.locks import (
     LOCK_LABELS, resolve_lock_key, detect_violation, format_locks_status,
 )
@@ -524,6 +529,8 @@ async def _private(m: Message, user: int, t: str) -> None:
     # locks from private (admin) → apply to allowed group
     if await _locks_cmd(m, settings.ALLOWED_GROUP_ID, user, t):
         return
+    if await process_extra(m, settings.ALLOWED_GROUP_ID, user, t, _get_bot(m)):
+        return
 
     # allow admin moderation commands from private (they still need group context for ban)
     await m.reply(info("از منو استفاده کن یا «راهنما» را بفرست."))
@@ -683,14 +690,26 @@ async def _enforce_locks(m: Message, gid: int, user: int, t: str) -> bool:
     """Delete violating messages. Returns True if message was blocked."""
     if is_special_admin(user):
         return False
+    try:
+        if await is_special_user(gid, user):
+            return False
+    except Exception:
+        pass
     # ignore lock/unlock/list and core bot commands themselves
     nt = _norm_cmd(t)
     if nt.startswith(("قفل", "بازکردن", "باز کردن", "قوانین", "تنظیم", "اکو", "نجوا", "گیف", "راهنما", "آمار", "امار")):
         return False
     try:
         locks = await get_group_locks(gid)
+        plocks = await get_personal_locks(gid, user)
     except Exception:
         return False
+    # merge personal: open → force off, lock → force on
+    for k, mode in (plocks or {}).items():
+        if mode == "open":
+            locks[k] = False
+        elif mode == "lock":
+            locks[k] = True
     if not any(locks.values()):
         return False
     key = detect_violation(m, t, locks)
@@ -731,7 +750,16 @@ async def on_message(m: Message) -> None:
     if await _locks_cmd(m, gid, user, t):
         return
 
+    bot_ref = _get_bot(m)
+    if await check_mute(m, gid, user):
+        return
+    if await check_force_join(m, gid, user, bot_ref):
+        return
+
     if await _enforce_locks(m, gid, user, t):
+        return
+
+    if await process_extra(m, gid, user, t, bot_ref):
         return
 
     try:
@@ -905,6 +933,11 @@ async def on_callback(cb: CallbackQuery) -> None:
             return await msg.reply(info("لاگی نیست."))
         lines = [f"• {r['action']} — {r.get('target_id')} توسط {r['actor_id']}" for r in logs]
         return await msg.reply(info("📜 لاگ\n\n" + "\n".join(lines)))
+    if await handle_asl_callback(cb, gid, user):
+        return
+    if await handle_panel_callback(cb, gid, user, _get_bot(cb.message) if getattr(cb, "message", None) else _bot):
+        return
+
     if data == "do_backup":
         return await _do_backup(msg, user)
 

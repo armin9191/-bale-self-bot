@@ -259,3 +259,392 @@ async def set_group_lock(group_id: int, lock_key: str, enabled: bool, by: int) -
         SET enabled=EXCLUDED.enabled, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
         group_id, lock_key, enabled, by,
     )
+
+
+# ---------- special users ----------
+async def add_special(group_id: int, user_id: int, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO special_users(group_id, user_id, granted_by)
+        VALUES($1,$2,$3) ON CONFLICT DO NOTHING""",
+        group_id, user_id, by,
+    )
+
+
+async def remove_special(group_id: int, user_id: int) -> bool:
+    r = await get_pool().execute(
+        "DELETE FROM special_users WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return r.endswith("1")
+
+
+async def clear_special(group_id: int) -> int:
+    r = await get_pool().execute("DELETE FROM special_users WHERE group_id=$1", group_id)
+    try:
+        return int(r.split()[-1])
+    except Exception:
+        return 0
+
+
+async def list_special(group_id: int) -> list[int]:
+    rows = await get_pool().fetch(
+        "SELECT user_id FROM special_users WHERE group_id=$1 ORDER BY created_at",
+        group_id,
+    )
+    return [int(r["user_id"]) for r in rows]
+
+
+async def is_special_user(group_id: int, user_id: int) -> bool:
+    row = await get_pool().fetchval(
+        "SELECT 1 FROM special_users WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return row is not None
+
+
+# ---------- titles (لقب) ----------
+async def set_title(group_id: int, user_id: int, title: str, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO user_titles(group_id, user_id, title, set_by)
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(group_id, user_id) DO UPDATE
+        SET title=EXCLUDED.title, set_by=EXCLUDED.set_by, created_at=NOW()""",
+        group_id, user_id, title, by,
+    )
+
+
+async def get_title(group_id: int, user_id: int) -> str | None:
+    return await get_pool().fetchval(
+        "SELECT title FROM user_titles WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def delete_title(group_id: int, user_id: int) -> bool:
+    r = await get_pool().execute(
+        "DELETE FROM user_titles WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return r.endswith("1")
+
+
+async def list_titles(group_id: int) -> list[dict]:
+    rows = await get_pool().fetch(
+        "SELECT user_id, title FROM user_titles WHERE group_id=$1 ORDER BY created_at DESC",
+        group_id,
+    )
+    return [dict(r) for r in rows]
+
+
+async def set_title_ttl(group_id: int, seconds: int, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_settings(group_id, title_ttl_seconds, updated_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET title_ttl_seconds=EXCLUDED.title_ttl_seconds, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, seconds, by,
+    )
+
+
+async def get_title_ttl(group_id: int) -> int:
+    v = await get_pool().fetchval(
+        "SELECT title_ttl_seconds FROM group_settings WHERE group_id=$1", group_id
+    )
+    return int(v or 0)
+
+
+# ---------- ASL / اصل ----------
+async def set_asl(group_id: int, user_id: int, body: str, by: int) -> None:
+    pool = get_pool()
+    old = await pool.fetchval(
+        "SELECT body FROM asl_profiles WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    if old and old != body:
+        await pool.execute(
+            "INSERT INTO asl_history(group_id, user_id, body) VALUES($1,$2,$3)",
+            group_id, user_id, old,
+        )
+    await pool.execute(
+        """INSERT INTO asl_profiles(group_id, user_id, body, updated_by, updated_at)
+        VALUES($1,$2,$3,$4,NOW())
+        ON CONFLICT(group_id, user_id) DO UPDATE
+        SET body=EXCLUDED.body, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, user_id, body, by,
+    )
+
+
+async def get_asl(group_id: int, user_id: int) -> dict | None:
+    row = await get_pool().fetchrow(
+        "SELECT * FROM asl_profiles WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return dict(row) if row else None
+
+
+async def delete_asl(group_id: int, user_id: int) -> bool:
+    r = await get_pool().execute(
+        "DELETE FROM asl_profiles WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    await get_pool().execute(
+        "DELETE FROM asl_likes WHERE group_id=$1 AND target_id=$2",
+        group_id, user_id,
+    )
+    return r.endswith("1")
+
+
+async def set_asl_verified(group_id: int, user_id: int, verified: bool) -> None:
+    await get_pool().execute(
+        """UPDATE asl_profiles SET verified=$3 WHERE group_id=$1 AND user_id=$2""",
+        group_id, user_id, verified,
+    )
+
+
+async def set_asl_self_register(group_id: int, enabled: bool, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_settings(group_id, asl_self_register, updated_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET asl_self_register=EXCLUDED.asl_self_register, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, enabled, by,
+    )
+
+
+async def get_asl_self_register(group_id: int) -> bool:
+    v = await get_pool().fetchval(
+        "SELECT asl_self_register FROM group_settings WHERE group_id=$1", group_id
+    )
+    return bool(v)
+
+
+async def list_asl(group_id: int, limit: int = 50) -> list[dict]:
+    rows = await get_pool().fetch(
+        """SELECT user_id, body, verified, likes, views FROM asl_profiles
+        WHERE group_id=$1 ORDER BY likes DESC, updated_at DESC LIMIT $2""",
+        group_id, limit,
+    )
+    return [dict(r) for r in rows]
+
+
+async def random_asl(group_id: int) -> dict | None:
+    row = await get_pool().fetchrow(
+        """SELECT * FROM asl_profiles WHERE group_id=$1 ORDER BY random() LIMIT 1""",
+        group_id,
+    )
+    return dict(row) if row else None
+
+
+async def top_asl(group_id: int, n: int = 5) -> list[dict]:
+    rows = await get_pool().fetch(
+        """SELECT user_id, body, likes, views, verified FROM asl_profiles
+        WHERE group_id=$1 ORDER BY likes DESC LIMIT $2""",
+        group_id, n,
+    )
+    return [dict(r) for r in rows]
+
+
+async def search_asl(group_id: int, q: str, limit: int = 20) -> list[dict]:
+    rows = await get_pool().fetch(
+        """SELECT user_id, body, likes, verified FROM asl_profiles
+        WHERE group_id=$1 AND body ILIKE $2 ORDER BY likes DESC LIMIT $3""",
+        group_id, f"%{q}%", limit,
+    )
+    return [dict(r) for r in rows]
+
+
+async def asl_stats(group_id: int) -> dict:
+    row = await get_pool().fetchrow(
+        """SELECT COUNT(*)::int AS total,
+                  COALESCE(SUM(likes),0)::int AS likes,
+                  COALESCE(SUM(views),0)::int AS views,
+                  COUNT(*) FILTER (WHERE verified)::int AS verified
+           FROM asl_profiles WHERE group_id=$1""",
+        group_id,
+    )
+    return dict(row) if row else {"total": 0, "likes": 0, "views": 0, "verified": 0}
+
+
+async def asl_history(group_id: int, user_id: int, limit: int = 10) -> list[dict]:
+    rows = await get_pool().fetch(
+        """SELECT body, created_at FROM asl_history
+        WHERE group_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT $3""",
+        group_id, user_id, limit,
+    )
+    return [dict(r) for r in rows]
+
+
+async def inc_asl_view(group_id: int, user_id: int) -> None:
+    await get_pool().execute(
+        "UPDATE asl_profiles SET views=views+1 WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def toggle_asl_like(group_id: int, target_id: int, liker_id: int) -> tuple[bool, int]:
+    """Returns (liked_now, total_likes)."""
+    pool = get_pool()
+    exists = await pool.fetchval(
+        "SELECT 1 FROM asl_likes WHERE group_id=$1 AND target_id=$2 AND liker_id=$3",
+        group_id, target_id, liker_id,
+    )
+    if exists:
+        await pool.execute(
+            "DELETE FROM asl_likes WHERE group_id=$1 AND target_id=$2 AND liker_id=$3",
+            group_id, target_id, liker_id,
+        )
+        await pool.execute(
+            "UPDATE asl_profiles SET likes=GREATEST(likes-1,0) WHERE group_id=$1 AND user_id=$2",
+            group_id, target_id,
+        )
+        liked = False
+    else:
+        await pool.execute(
+            "INSERT INTO asl_likes(group_id, target_id, liker_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+            group_id, target_id, liker_id,
+        )
+        await pool.execute(
+            "UPDATE asl_profiles SET likes=likes+1 WHERE group_id=$1 AND user_id=$2",
+            group_id, target_id,
+        )
+        liked = True
+    total = await pool.fetchval(
+        "SELECT likes FROM asl_profiles WHERE group_id=$1 AND user_id=$2",
+        group_id, target_id,
+    )
+    return liked, int(total or 0)
+
+
+# ---------- mute / warn / protect / personal locks / managers ----------
+async def get_warnings(group_id: int, user_id: int) -> int:
+    v = await get_pool().fetchval(
+        "SELECT count FROM user_warnings WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return int(v or 0)
+
+
+async def clear_warnings(group_id: int, user_id: int) -> None:
+    await get_pool().execute(
+        "DELETE FROM user_warnings WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def add_warning(group_id: int, user_id: int) -> int:
+    await get_pool().execute(
+        """INSERT INTO user_warnings(group_id, user_id, count) VALUES($1,$2,1)
+        ON CONFLICT(group_id, user_id) DO UPDATE SET count=user_warnings.count+1""",
+        group_id, user_id,
+    )
+    return await get_warnings(group_id, user_id)
+
+
+async def set_mute(group_id: int, user_id: int, until_ts, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO user_mutes(group_id, user_id, until_ts, muted_by)
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(group_id, user_id) DO UPDATE
+        SET until_ts=EXCLUDED.until_ts, muted_by=EXCLUDED.muted_by""",
+        group_id, user_id, until_ts, by,
+    )
+
+
+async def clear_mute(group_id: int, user_id: int) -> None:
+    await get_pool().execute(
+        "DELETE FROM user_mutes WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def get_mute(group_id: int, user_id: int):
+    return await get_pool().fetchrow(
+        "SELECT until_ts, muted_by FROM user_mutes WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def set_protection(group_id: int, user_id: int, protected: bool, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO user_protection(group_id, user_id, protected, set_by)
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(group_id, user_id) DO UPDATE
+        SET protected=EXCLUDED.protected, set_by=EXCLUDED.set_by""",
+        group_id, user_id, protected, by,
+    )
+
+
+async def is_protected(group_id: int, user_id: int) -> bool:
+    v = await get_pool().fetchval(
+        "SELECT protected FROM user_protection WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return bool(v)
+
+
+async def set_personal_lock(group_id: int, user_id: int, lock_key: str, mode: str) -> None:
+    await get_pool().execute(
+        """INSERT INTO user_personal_locks(group_id, user_id, lock_key, mode)
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(group_id, user_id, lock_key) DO UPDATE SET mode=EXCLUDED.mode""",
+        group_id, user_id, lock_key, mode,
+    )
+
+
+async def get_personal_locks(group_id: int, user_id: int) -> dict[str, str]:
+    rows = await get_pool().fetch(
+        "SELECT lock_key, mode FROM user_personal_locks WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return {r["lock_key"]: r["mode"] for r in rows}
+
+
+async def clear_personal_locks(group_id: int, user_id: int) -> None:
+    await get_pool().execute(
+        "DELETE FROM user_personal_locks WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def add_bot_manager(group_id: int, user_id: int, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO bot_managers(group_id, user_id, granted_by)
+        VALUES($1,$2,$3) ON CONFLICT DO NOTHING""",
+        group_id, user_id, by,
+    )
+
+
+async def remove_bot_manager(group_id: int, user_id: int) -> None:
+    await get_pool().execute(
+        "DELETE FROM bot_managers WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+
+
+async def is_bot_manager(group_id: int, user_id: int) -> bool:
+    v = await get_pool().fetchval(
+        "SELECT 1 FROM bot_managers WHERE group_id=$1 AND user_id=$2",
+        group_id, user_id,
+    )
+    return v is not None
+
+
+# ---------- force join ----------
+async def set_force_join(group_id: int, channel_id: str, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO force_join(group_id, channel_id, set_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET channel_id=EXCLUDED.channel_id, set_by=EXCLUDED.set_by, updated_at=NOW()""",
+        group_id, channel_id, by,
+    )
+
+
+async def clear_force_join(group_id: int) -> None:
+    await get_pool().execute("DELETE FROM force_join WHERE group_id=$1", group_id)
+
+
+async def get_force_join(group_id: int) -> str | None:
+    return await get_pool().fetchval(
+        "SELECT channel_id FROM force_join WHERE group_id=$1", group_id
+    )

@@ -101,6 +101,87 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
     details JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS special_users (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    granted_by BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS user_titles (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    title TEXT NOT NULL,
+    set_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS asl_profiles (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    verified BOOLEAN NOT NULL DEFAULT FALSE,
+    likes INTEGER NOT NULL DEFAULT 0,
+    views INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by BIGINT,
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS asl_likes (
+    group_id BIGINT NOT NULL,
+    target_id BIGINT NOT NULL,
+    liker_id BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, target_id, liker_id)
+);
+CREATE TABLE IF NOT EXISTS asl_history (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS user_warnings (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS user_mutes (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    until_ts TIMESTAMPTZ,
+    muted_by BIGINT,
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS user_protection (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    protected BOOLEAN NOT NULL DEFAULT TRUE,
+    set_by BIGINT,
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS user_personal_locks (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    lock_key TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'default',
+    PRIMARY KEY (group_id, user_id, lock_key)
+);
+CREATE TABLE IF NOT EXISTS bot_managers (
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    granted_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS force_join (
+    group_id BIGINT PRIMARY KEY,
+    channel_id TEXT NOT NULL,
+    set_by BIGINT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 
@@ -116,6 +197,12 @@ async def init_db(max_retries: int = 5) -> asyncpg.Pool:
             )
             async with _pool.acquire() as con:
                 await con.execute(SCHEMA)
+                await con.execute("""
+                    ALTER TABLE group_settings
+                    ADD COLUMN IF NOT EXISTS asl_self_register BOOLEAN NOT NULL DEFAULT FALSE;
+                    ALTER TABLE group_settings
+                    ADD COLUMN IF NOT EXISTS title_ttl_seconds INTEGER NOT NULL DEFAULT 0;
+                """)
             log.info("PostgreSQL connected")
             return _pool
         except Exception as e:
