@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS whispers (
     expires_at TIMESTAMPTZ,
     viewed BOOLEAN NOT NULL DEFAULT FALSE
 );
+CREATE TABLE IF NOT EXISTS group_settings (
+    group_id BIGINT PRIMARY KEY,
+    rules_text TEXT,
+    welcome_text TEXT,
+    farewell_text TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by BIGINT
+);
 CREATE TABLE IF NOT EXISTS moderation_logs (
     id BIGSERIAL PRIMARY KEY,
     group_id BIGINT NOT NULL,

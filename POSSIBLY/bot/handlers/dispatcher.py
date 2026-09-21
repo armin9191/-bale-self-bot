@@ -23,6 +23,7 @@ from database.repositories import (
     count_learned, set_learned, delete_learned, list_learned_triggers, get_learned_response,
     log_moderation, recent_logs, create_whisper, get_whisper, mark_whisper_viewed,
     list_group_members_seen, save_game, load_active_game,
+    get_group_settings, set_group_rules, set_group_welcome, set_group_farewell,
 )
 from bot.games.tic_tac_toe import TicTacToe
 from bot.games.mafia import new_state as mafia_new, assign_roles, check_win, Phase as MafiaPhase
@@ -520,6 +521,103 @@ async def _private(m: Message, user: int, t: str) -> None:
     await m.reply(info("از منو استفاده کن یا «راهنما» را بفرست."))
 
 
+
+def _format_template(tpl: str, user_name: str, gap_name: str) -> str:
+    if not tpl:
+        return ""
+    out = tpl
+    for key, val in (
+        ("[User name]", user_name),
+        ("[user name]", user_name),
+        ("[Username]", user_name),
+        ("[username]", user_name),
+        ("[Gap name]", gap_name),
+        ("[gap name]", gap_name),
+        ("[Group name]", gap_name),
+        ("[group name]", gap_name),
+    ):
+        out = out.replace(key, val)
+    return out
+
+
+async def _rules_and_greetings(m: Message, gid: int, user: int, t: str) -> bool:
+    """قوانین / خوشامد / بدرقه."""
+    nt = _norm_cmd(t)
+
+    if nt in ("قوانین", "قانون", "rules"):
+        st = await get_group_settings(gid)
+        rules = (st.get("rules_text") or "").strip()
+        if not rules:
+            await m.reply(info("هنوز قوانینی ثبت نشده است.\nادمین با «تنظیم قوانین ...» ثبت می‌کند."))
+        else:
+            await m.reply(info(f"📜 قوانین گروه\n\n{rules}"))
+        return True
+
+    if nt.startswith("تنظیم قوانین") or nt.startswith("ثبت قوانین"):
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin/Owner."))
+            return True
+        body = ""
+        for pfx in ("تنظیم قوانین", "ثبت قوانین"):
+            if pfx in t:
+                body = t.split(pfx, 1)[-1].strip()
+                break
+        if not body:
+            lines = t.strip().splitlines()
+            if len(lines) >= 2:
+                body = "\n".join(x.strip() for x in lines[1:] if x.strip())
+        if not body:
+            await m.reply(error("فرمت:\nتنظیم قوانین\nتبلیغ : بن\nفحش : بن"))
+            return True
+        await set_group_rules(gid, body, user)
+        await m.reply(success("قوانین تنظیم شد !"))
+        return True
+
+    if nt.startswith("تنظیم خوشامد") or nt.startswith("تنظیم خوش آمد"):
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin/Owner."))
+            return True
+        body = ""
+        for pfx in ("تنظیم خوشامد پازیبلی", "تنظیم خوشامد", "تنظیم خوش آمد"):
+            if pfx in t:
+                body = t.split(pfx, 1)[-1].strip()
+                break
+        if not body:
+            lines = t.strip().splitlines()
+            if len(lines) >= 2:
+                body = "\n".join(x.strip() for x in lines[1:] if x.strip())
+        if not body:
+            await m.reply(error(
+                "فرمت:\nتنظیم خوشامد سلام [User name] خوش اومدی به [Gap name]"
+            ))
+            return True
+        await set_group_welcome(gid, body, user)
+        await m.reply(success("خوشامد تنظیم شد"))
+        return True
+
+    if nt.startswith("تنظیم بدرقه"):
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin/Owner."))
+            return True
+        body = ""
+        if "تنظیم بدرقه" in t:
+            body = t.split("تنظیم بدرقه", 1)[-1].strip()
+        if not body:
+            lines = t.strip().splitlines()
+            if len(lines) >= 2:
+                body = "\n".join(x.strip() for x in lines[1:] if x.strip())
+        if not body:
+            await m.reply(error(
+                "فرمت:\nتنظیم بدرقه خداحافظ [User name] امیدوارم برگردی به [Gap name]"
+            ))
+            return True
+        await set_group_farewell(gid, body, user)
+        await m.reply(success("بدرقه تنظیم شد"))
+        return True
+
+    return False
+
+
 async def on_message(m: Message) -> None:
     user = _uid(m)
     if user is None:
@@ -547,6 +645,8 @@ async def on_message(m: Message) -> None:
         return await _show_stats(m, gid)
     if t in ("راهنما", "help", "دستورات"):
         return await m.reply(help_text())
+    if await _rules_and_greetings(m, gid, user, t):
+        return
     if await _echo(m, t):
         return
     if await _whisper(m, gid, user, t):
@@ -909,3 +1009,81 @@ def register_handlers(bot: Bot) -> None:
             await on_callback(callback)
         except Exception:
             log.exception("on_callback")
+
+    @bot.listen("on_member_chat_join")
+    async def _join(message: Message, chat, user):
+        try:
+            gid = int(getattr(chat, "id", 0) or 0)
+            if gid != settings.ALLOWED_GROUP_ID:
+                return
+            st = await get_group_settings(gid)
+            tpl = (st.get("welcome_text") or "").strip()
+            if not tpl:
+                return
+            uname = (
+                getattr(user, "first_name", None)
+                or getattr(user, "username", None)
+                or str(getattr(user, "id", ""))
+            )
+            gap = (
+                getattr(chat, "title", None)
+                or settings.ALLOWED_GROUP_USERNAME
+                or "گروه"
+            )
+            text_out = _format_template(tpl, str(uname), str(gap))
+            try:
+                await chat.send(info(text_out))
+            except Exception:
+                if message is not None:
+                    await message.reply(info(text_out))
+            # track member
+            try:
+                uid = int(user.id)
+                await upsert_user(uid, getattr(user, "username", None), str(uname))
+                await upsert_member(gid, uid, "member")
+            except Exception:
+                pass
+        except Exception:
+            log.exception("on_member_chat_join")
+
+    @bot.listen("on_member_chat_leave")
+    async def _leave(message: Message, chat, user):
+        try:
+            gid = int(getattr(chat, "id", 0) or 0)
+            if gid != settings.ALLOWED_GROUP_ID:
+                return
+            st = await get_group_settings(gid)
+            tpl = (st.get("farewell_text") or "").strip()
+            if not tpl:
+                return
+            uname = (
+                getattr(user, "first_name", None)
+                or getattr(user, "username", None)
+                or str(getattr(user, "id", ""))
+            )
+            gap = (
+                getattr(chat, "title", None)
+                or settings.ALLOWED_GROUP_USERNAME
+                or "گروه"
+            )
+            text_out = _format_template(tpl, str(uname), str(gap))
+            # group message
+            try:
+                await chat.send(info(text_out))
+            except Exception:
+                if message is not None:
+                    try:
+                        await message.reply(info(text_out))
+                    except Exception:
+                        pass
+            # try PM if user started the bot
+            try:
+                bot = _bot
+                if bot is not None:
+                    u = await bot.get_user(int(user.id))
+                    if u is not None:
+                        await u.send(info(text_out))
+            except Exception as e:
+                log.info("farewell PM skipped: %s", e)
+        except Exception:
+            log.exception("on_member_chat_leave")

@@ -201,3 +201,43 @@ async def dump_all_tables_sql() -> str:
                 lines.append(f"INSERT INTO {table} ({col_list}) VALUES ({', '.join(vals)});")
             lines.append("")
     return "\n".join(lines)
+
+
+async def get_group_settings(group_id: int) -> dict:
+    row = await get_pool().fetchrow(
+        "SELECT rules_text, welcome_text, farewell_text FROM group_settings WHERE group_id=$1",
+        group_id,
+    )
+    if not row:
+        return {"rules_text": None, "welcome_text": None, "farewell_text": None}
+    return dict(row)
+
+
+async def set_group_rules(group_id: int, rules: str, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_settings(group_id, rules_text, updated_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET rules_text=EXCLUDED.rules_text, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, rules, by,
+    )
+
+
+async def set_group_welcome(group_id: int, welcome: str, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_settings(group_id, welcome_text, updated_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET welcome_text=EXCLUDED.welcome_text, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, welcome, by,
+    )
+
+
+async def set_group_farewell(group_id: int, farewell: str, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_settings(group_id, farewell_text, updated_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET farewell_text=EXCLUDED.farewell_text, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, farewell, by,
+    )
