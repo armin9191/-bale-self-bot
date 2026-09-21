@@ -790,3 +790,22 @@ async def clear_all_warns(group_id: int) -> int:
         return int(r.split()[-1])
     except Exception:
         return 0
+
+
+async def set_auto_reply(group_id: int, enabled: bool, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_settings(group_id, auto_reply_enabled, updated_by, updated_at)
+        VALUES($1,$2,$3,NOW())
+        ON CONFLICT(group_id) DO UPDATE
+        SET auto_reply_enabled=EXCLUDED.auto_reply_enabled, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, enabled, by,
+    )
+
+
+async def get_auto_reply(group_id: int) -> bool:
+    v = await get_pool().fetchval(
+        "SELECT auto_reply_enabled FROM group_settings WHERE group_id=$1", group_id
+    )
+    if v is None:
+        return True  # default ON
+    return bool(v)

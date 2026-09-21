@@ -39,6 +39,8 @@ from bot.handlers.extra_features import (
 from bot.handlers.moderation_features import (
     process_moderation_features, check_group_lock,
 )
+from bot.auto_reply import pick_auto_reply
+from database.repositories import get_auto_reply, set_auto_reply
 from database.repositories import is_special_user, get_personal_locks
 from bot.locks import (
     LOCK_LABELS, resolve_lock_key, detect_violation, format_locks_status,
@@ -534,6 +536,8 @@ async def _private(m: Message, user: int, t: str) -> None:
         return
     if await process_moderation_features(m, settings.ALLOWED_GROUP_ID, user, t, _get_bot(m)):
         return
+    if await _auto_reply_cmd(m, settings.ALLOWED_GROUP_ID, user, t):
+        return
     if await process_extra(m, settings.ALLOWED_GROUP_ID, user, t, _get_bot(m)):
         return
 
@@ -736,6 +740,50 @@ async def _enforce_locks(m: Message, gid: int, user: int, t: str) -> bool:
     return True
 
 
+
+async def _auto_reply_cmd(m: Message, gid: int, user: int, t: str) -> bool:
+    nt = t.strip().replace("‌", " ")
+    if nt in ("پاسخ خودکار خاموش", "پاسخ‌خودکار خاموش", "خاموش پاسخ خودکار"):
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin."))
+            return True
+        await set_auto_reply(gid, False, user)
+        await m.reply(success("پاسخ خودکار خاموش شد. (یادگیری دست‌نخورده می‌ماند)"))
+        return True
+    if nt in ("پاسخ خودکار روشن", "پاسخ‌خودکار روشن", "روشن پاسخ خودکار"):
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin."))
+            return True
+        await set_auto_reply(gid, True, user)
+        await m.reply(success("پاسخ خودکار روشن شد."))
+        return True
+    return False
+
+
+async def _try_auto_reply(m: Message, gid: int, t: str) -> bool:
+    """Default chit-chat replies; does not touch learned words."""
+    try:
+        if not await get_auto_reply(gid):
+            return False
+    except Exception:
+        pass
+    # skip obvious commands
+    head = (t or "").strip().split()[0] if (t or "").strip() else ""
+    skip_prefixes = (
+        "بن", "کیک", "آنبن", "انبن", "اکو", "نجوا", "گیف", "قفل", "باز", "تنظیم",
+        "ثبت", "حذف", "اخطار", "سکوت", "ویژه", "اصل", "لقب", "پنل", "یاد", "فراموش",
+        "آمار", "امار", "راهنما", "دوز", "مافیا", "جرعت", "قوانین", "اطلاعات",
+        "پاسخ", "/",
+    )
+    if any(head.startswith(x) for x in skip_prefixes):
+        return False
+    reply = pick_auto_reply(t)
+    if not reply:
+        return False
+    await m.reply(info(reply))
+    return True
+
+
 async def on_message(m: Message) -> None:
     user = _uid(m)
     if user is None:
@@ -767,6 +815,8 @@ async def on_message(m: Message) -> None:
         return
 
     if await process_moderation_features(m, gid, user, t, bot_ref):
+        return
+    if await _auto_reply_cmd(m, gid, user, t):
         return
     if await process_extra(m, gid, user, t, bot_ref):
         return
@@ -896,7 +946,9 @@ async def on_message(m: Message) -> None:
             components=tod_lobby_keyboard(),
         )
 
-    await _learning(m, gid, user, t)
+    if await _learning(m, gid, user, t):
+        return
+    await _try_auto_reply(m, gid, t)
 
 
 async def on_callback(cb: CallbackQuery) -> None:

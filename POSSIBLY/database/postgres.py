@@ -235,6 +235,8 @@ async def init_db(max_retries: int = 5) -> asyncpg.Pool:
                     ADD COLUMN IF NOT EXISTS asl_self_register BOOLEAN NOT NULL DEFAULT FALSE;
                     ALTER TABLE group_settings
                     ADD COLUMN IF NOT EXISTS title_ttl_seconds INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE group_settings
+                    ADD COLUMN IF NOT EXISTS auto_reply_enabled BOOLEAN NOT NULL DEFAULT TRUE;
                 """)
             log.info("PostgreSQL connected")
             return _pool
