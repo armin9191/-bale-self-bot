@@ -24,6 +24,7 @@ from database.repositories import (
     log_moderation, recent_logs, create_whisper, get_whisper, mark_whisper_viewed,
     list_group_members_seen, save_game, load_active_game,
     get_group_settings, set_group_rules, set_group_welcome, set_group_farewell,
+    get_group_locks, set_group_lock,
 )
 from bot.games.tic_tac_toe import TicTacToe
 from bot.games.mafia import new_state as mafia_new, assign_roles, check_win, Phase as MafiaPhase
@@ -31,6 +32,9 @@ from bot.games.truth_dare import new_state as tod_new, pick as tod_pick
 from bot.handlers.backup import create_backup
 from bot.handlers.gif import process_gif
 from bot.bale_api import answer_callback_query
+from bot.locks import (
+    LOCK_LABELS, resolve_lock_key, detect_violation, format_locks_status,
+)
 
 log = logging.getLogger("POSSIBLY.dispatcher")
 
@@ -517,6 +521,10 @@ async def _private(m: Message, user: int, t: str) -> None:
         else:
             await m.reply(error("آمار گروه فقط برای Admin."))
         return
+    # locks from private (admin) → apply to allowed group
+    if await _locks_cmd(m, settings.ALLOWED_GROUP_ID, user, t):
+        return
+
     # allow admin moderation commands from private (they still need group context for ban)
     await m.reply(info("از منو استفاده کن یا «راهنما» را بفرست."))
 
@@ -618,6 +626,92 @@ async def _rules_and_greetings(m: Message, gid: int, user: int, t: str) -> bool:
     return False
 
 
+
+async def _locks_cmd(m: Message, gid: int, user: int, t: str) -> bool:
+    """قفل / بازکردن / لیست قفل‌ها — group or private (targets allowed group)."""
+    nt = _norm_cmd(t)
+    # list
+    if nt in ("قفل ها", "قفل‌ها", "قفلها", "لیست قفل", "لیست قفل‌ها", "locks"):
+        locks = await get_group_locks(gid)
+        await m.reply(info(format_locks_status(locks)))
+        return True
+
+    # lock
+    if nt.startswith("قفل ") or nt == "قفل":
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin/Owner."))
+            return True
+        raw = nt[len("قفل"):].strip()
+        if not raw:
+            locks = await get_group_locks(gid)
+            await m.reply(info(format_locks_status(locks)))
+            return True
+        key = resolve_lock_key(raw)
+        if not key:
+            await m.reply(error("مورد نامعتبر. مثال: قفل گیف"))
+            return True
+        await set_group_lock(gid, key, True, user)
+        label = LOCK_LABELS.get(key, key)
+        await m.reply(success(f"{label} قفل شد."))
+        return True
+
+    # unlock: بازکردن / باز کردن
+    if nt.startswith("بازکردن") or nt.startswith("باز کردن"):
+        if not is_special_admin(user):
+            await m.reply(error("فقط Admin/Owner."))
+            return True
+        if nt.startswith("باز کردن"):
+            raw = nt[len("باز کردن"):].strip()
+        else:
+            raw = nt[len("بازکردن"):].strip()
+        if not raw:
+            await m.reply(error("مثال: بازکردن گیف"))
+            return True
+        key = resolve_lock_key(raw)
+        if not key:
+            await m.reply(error("مورد نامعتبر. مثال: بازکردن گیف"))
+            return True
+        await set_group_lock(gid, key, False, user)
+        label = LOCK_LABELS.get(key, key)
+        await m.reply(success(f"{label} باز شد."))
+        return True
+
+    return False
+
+
+async def _enforce_locks(m: Message, gid: int, user: int, t: str) -> bool:
+    """Delete violating messages. Returns True if message was blocked."""
+    if is_special_admin(user):
+        return False
+    # ignore lock/unlock/list and core bot commands themselves
+    nt = _norm_cmd(t)
+    if nt.startswith(("قفل", "بازکردن", "باز کردن", "قوانین", "تنظیم", "اکو", "نجوا", "گیف", "راهنما", "آمار", "امار")):
+        return False
+    try:
+        locks = await get_group_locks(gid)
+    except Exception:
+        return False
+    if not any(locks.values()):
+        return False
+    key = detect_violation(m, t, locks)
+    if not key:
+        return False
+    try:
+        await m.delete()
+    except Exception as e:
+        log.info("lock delete failed: %s", e)
+    label = LOCK_LABELS.get(key, key)
+    try:
+        await m.reply(error(f"قفل فعال است: {label}"))
+    except Exception:
+        pass
+    try:
+        await log_moderation(gid, user, user, f"lock:{key}")
+    except Exception:
+        pass
+    return True
+
+
 async def on_message(m: Message) -> None:
     user = _uid(m)
     if user is None:
@@ -632,6 +726,12 @@ async def on_message(m: Message) -> None:
         return await m.reply(info("این ربات فقط برای گروه مجاز فعال است."))
 
     if not _rate_ok(user):
+        return
+
+    if await _locks_cmd(m, gid, user, t):
+        return
+
+    if await _enforce_locks(m, gid, user, t):
         return
 
     try:

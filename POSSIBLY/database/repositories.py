@@ -241,3 +241,21 @@ async def set_group_farewell(group_id: int, farewell: str, by: int) -> None:
         SET farewell_text=EXCLUDED.farewell_text, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
         group_id, farewell, by,
     )
+
+
+async def get_group_locks(group_id: int) -> dict[str, bool]:
+    rows = await get_pool().fetch(
+        "SELECT lock_key, enabled FROM group_locks WHERE group_id=$1",
+        group_id,
+    )
+    return {r["lock_key"]: bool(r["enabled"]) for r in rows}
+
+
+async def set_group_lock(group_id: int, lock_key: str, enabled: bool, by: int) -> None:
+    await get_pool().execute(
+        """INSERT INTO group_locks(group_id, lock_key, enabled, updated_by, updated_at)
+        VALUES($1,$2,$3,$4,NOW())
+        ON CONFLICT(group_id, lock_key) DO UPDATE
+        SET enabled=EXCLUDED.enabled, updated_by=EXCLUDED.updated_by, updated_at=NOW()""",
+        group_id, lock_key, enabled, by,
+    )

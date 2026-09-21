@@ -75,7 +75,16 @@ CREATE TABLE IF NOT EXISTS whispers (
     expires_at TIMESTAMPTZ,
     viewed BOOLEAN NOT NULL DEFAULT FALSE
 );
+CREATE TABLE IF NOT EXISTS group_locks (
+    group_id BIGINT NOT NULL,
+    lock_key TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_by BIGINT,
+    PRIMARY KEY (group_id, lock_key)
+);
 CREATE TABLE IF NOT EXISTS group_settings (
+
     group_id BIGINT PRIMARY KEY,
     rules_text TEXT,
     welcome_text TEXT,
