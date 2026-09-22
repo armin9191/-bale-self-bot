@@ -6,15 +6,7 @@ import os
 import sqlite3
 import time
 
-
-# ==============================
-# تنظیمات دیتابیس
-# ==============================
-
-DATABASE_NAME = os.getenv(
-    "DATABASE_PATH",
-    "data/bot.db"
-)
+from config import DATABASE_NAME
 
 
 # ==============================
@@ -39,7 +31,7 @@ def get_connection():
 
 
 # ==============================
-# ساخت دیتابیس
+# ساخت جداول
 # ==============================
 
 def init_db():
@@ -47,9 +39,9 @@ def init_db():
     connection = get_connection()
     cursor = connection.cursor()
 
-    # --------------------------
+    # ==========================
     # گروه‌ها
-    # --------------------------
+    # ==========================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS groups (
@@ -61,9 +53,9 @@ def init_db():
         )
     """)
 
-    # --------------------------
+    # ==========================
     # کاربران
-    # --------------------------
+    # ==========================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -75,9 +67,9 @@ def init_db():
         )
     """)
 
-    # --------------------------
+    # ==========================
     # تنظیمات گروه
-    # --------------------------
+    # ==========================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS group_settings (
