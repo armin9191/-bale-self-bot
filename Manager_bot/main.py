@@ -189,6 +189,44 @@ def save_message_data(message):
 
 
 # ==============================
+# بررسی ادمین گروه
+# ==============================
+
+def is_group_admin(
+    group_id,
+    user_id
+):
+
+    result = api(
+        "getChatMember",
+        {
+            "chat_id": group_id,
+            "user_id": user_id
+        }
+    )
+
+    if not result:
+        return False
+
+    if not result.get("ok"):
+        return False
+
+    member = result.get(
+        "result",
+        {}
+    )
+
+    status = member.get(
+        "status"
+    )
+
+    return status in (
+        "administrator",
+        "creator"
+    )
+
+
+# ==============================
 # پردازش Callback
 # ==============================
 
@@ -202,7 +240,8 @@ def handle_callback(callback_query):
     )
 
     callback_data = callback_query.get(
-        "data"
+        "data",
+        ""
     )
 
     message = callback_query.get(
@@ -223,20 +262,16 @@ def handle_callback(callback_query):
         "message_id"
     )
 
-    # ==========================
-    # پاسخ به کلیک
-    # ==========================
+    callback_user = callback_query.get(
+        "from",
+        {}
+    )
 
-    if callback_id:
+    user_id = callback_user.get(
+        "id"
+    )
 
-        api(
-            "answerCallbackQuery",
-            {
-                "callback_query_id": callback_id
-            }
-        )
-
-    if not chat_id or not message_id:
+    if not chat_id or not message_id or not user_id:
         return
 
     # ==========================
@@ -245,11 +280,49 @@ def handle_callback(callback_query):
 
     if callback_data == "dashboard_group":
 
-        edit_message(
+        # ======================
+        # بررسی ادمین
+        # ======================
+
+        if not is_group_admin(
             chat_id,
-            message_id,
-            "⚙️ داشبورد گروه\n\n"
-            "تنظیمات گروه را از اینجا مدیریت کنید."
+            user_id
+        ):
+
+            if callback_id:
+
+                api(
+                    "answerCallbackQuery",
+                    {
+                        "callback_query_id": callback_id,
+                        "text": "⛔ شما ادمین این گروه نیستید!",
+                        "show_alert": True
+                    }
+                )
+
+            return
+
+        # ======================
+        # بستن لودینگ دکمه
+        # ======================
+
+        if callback_id:
+
+            api(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id
+                }
+            )
+
+        # ======================
+        # باز کردن همان داشبورد
+        # ======================
+
+        dashboard.open_group_dashboard(
+            chat_id,
+            chat_id,
+            message_id
         )
 
         return
@@ -316,42 +389,12 @@ def handle_dashboard_start(
         return True
 
     # ==========================
-    # بررسی ادمین بودن
+    # بررسی ادمین
     # ==========================
 
-    member_result = api(
-        "getChatMember",
-        {
-            "chat_id": group_id,
-            "user_id": user_id
-        }
-    )
-
-    if not member_result:
-
-        send_message(
-            private_chat_id,
-            "❌ نتونستم وضعیت مدیریت شما رو بررسی کنم."
-        )
-
-        return True
-
-    member = member_result.get(
-        "result",
-        {}
-    )
-
-    status = member.get(
-        "status"
-    )
-
-    # ==========================
-    # کاربر ادمین نیست
-    # ==========================
-
-    if status not in (
-        "administrator",
-        "creator"
+    if not is_group_admin(
+        group_id,
+        user_id
     ):
 
         send_message(
@@ -429,7 +472,7 @@ def handle_message(message):
             payload = parts[1].strip()
 
         # ======================
-        # ورود مستقیم داشبورد
+        # داشبورد PV
         # ======================
 
         if payload.startswith(
@@ -554,10 +597,6 @@ def handle_message(message):
         target_message = moderation_result[
             "target_message"
         ]
-
-        # ======================
-        # اجرای عملیات
-        # ======================
 
         result = moderation_actions.execute_command(
             command,
