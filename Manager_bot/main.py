@@ -1,3 +1,4 @@
+```python
 # ==============================
 # Group Manager Bot - Main
 # ==============================
@@ -8,6 +9,7 @@ import requests
 import config
 import keyboards
 import database
+from features import moderation
 
 
 # ==============================
@@ -63,6 +65,16 @@ def send_message(chat_id, text, reply_markup=None):
         data["reply_markup"] = reply_markup
 
     return api("sendMessage", data)
+
+
+# ==============================
+# اتصال ماژول‌ها
+# ==============================
+
+moderation.setup(
+    send_message,
+    api
+)
 
 
 # ==============================
@@ -148,6 +160,47 @@ def handle_message(message):
             keyboards.main_keyboard()
         )
 
+        return
+
+    # ==========================
+    # دستورات مدیریت گروه
+    # ==========================
+
+    moderation_result = moderation.handle_message(
+        message
+    )
+
+    if not moderation_result:
+        return
+
+    # ==========================
+    # کاربر عادی
+    # ==========================
+
+    if moderation_result["type"] == "not_admin":
+
+        send_message(
+            chat_id,
+            moderation.not_admin_message()
+        )
+
+        return
+
+    # ==========================
+    # فعلاً فقط تست تشخیص ادمین
+    # ==========================
+
+    if moderation_result["type"] == "admin":
+
+        command = moderation_result["command"]
+
+        send_message(
+            chat_id,
+            f"✅ دستور «{command}» توسط ادمین دریافت شد."
+        )
+
+        return
+
 
 # ==============================
 # دریافت آپدیت‌ها
@@ -225,3 +278,4 @@ def start():
             print(f"Main Error: {error}")
 
             time.sleep(3)
+```
