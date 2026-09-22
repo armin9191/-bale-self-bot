@@ -1,4 +1,3 @@
-```python
 # ==============================
 # Group Manager Bot - Main
 # ==============================
@@ -67,6 +66,53 @@ def send_message(chat_id, text, reply_markup=None):
 
 
 # ==============================
+# ثبت اطلاعات پیام
+# ==============================
+
+def save_message_data(message):
+
+    chat = message.get("chat", {})
+    user = message.get("from", {})
+
+    chat_id = chat.get("id")
+    chat_type = chat.get("type")
+
+    user_id = user.get("id")
+
+    if not chat_id:
+        return
+
+    # ==========================
+    # فقط گروه‌ها
+    # ==========================
+
+    if chat_type in ("group", "supergroup"):
+
+        group_name = (
+            chat.get("title")
+            or chat.get("first_name")
+            or "بدون نام"
+        )
+
+        database.save_group(
+            chat_id,
+            group_name
+        )
+
+        # ======================
+        # ثبت کاربر
+        # ======================
+
+        if user_id:
+
+            database.save_user(
+                user_id,
+                user.get("username"),
+                user.get("first_name")
+            )
+
+
+# ==============================
 # پردازش پیام
 # ==============================
 
@@ -74,6 +120,12 @@ def handle_message(message):
 
     if not message:
         return
+
+    # ==========================
+    # ثبت اطلاعات
+    # ==========================
+
+    save_message_data(message)
 
     chat = message.get("chat", {})
     chat_id = chat.get("id")
@@ -173,4 +225,3 @@ def start():
             print(f"Main Error: {error}")
 
             time.sleep(3)
-```
