@@ -90,3 +90,91 @@ def init_db():
 
     connection.commit()
     connection.close()
+
+
+# ==============================
+# ثبت / بروزرسانی گروه
+# ==============================
+
+def save_group(group_id, group_name):
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    now = int(time.time())
+
+    cursor.execute("""
+        INSERT INTO groups (
+            group_id,
+            group_name,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?)
+
+        ON CONFLICT(group_id)
+        DO UPDATE SET
+            group_name = excluded.group_name,
+            updated_at = excluded.updated_at
+    """, (
+        group_id,
+        group_name,
+        now,
+        now
+    ))
+
+    # ==========================
+    # ساخت تنظیمات اولیه گروه
+    # ==========================
+
+    cursor.execute("""
+        INSERT OR IGNORE INTO group_settings (
+            group_id,
+            updated_at
+        )
+        VALUES (?, ?)
+    """, (
+        group_id,
+        now
+    ))
+
+    connection.commit()
+    connection.close()
+
+
+# ==============================
+# ثبت / بروزرسانی کاربر
+# ==============================
+
+def save_user(user_id, username, first_name):
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    now = int(time.time())
+
+    cursor.execute("""
+        INSERT INTO users (
+            user_id,
+            username,
+            first_name,
+            created_at,
+            last_active_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+
+        ON CONFLICT(user_id)
+        DO UPDATE SET
+            username = excluded.username,
+            first_name = excluded.first_name,
+            last_active_at = excluded.last_active_at
+    """, (
+        user_id,
+        username,
+        first_name,
+        now,
+        now
+    ))
+
+    connection.commit()
+    connection.close()
