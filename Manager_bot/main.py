@@ -1,4 +1,3 @@
-
 # ==============================
 # Group Manager Bot - Main
 # ==============================
@@ -9,7 +8,9 @@ import requests
 import config
 import keyboards
 import database
+
 from features import moderation
+from features import moderation_actions
 
 
 # ==============================
@@ -64,7 +65,10 @@ def send_message(chat_id, text, reply_markup=None):
     if reply_markup:
         data["reply_markup"] = reply_markup
 
-    return api("sendMessage", data)
+    return api(
+        "sendMessage",
+        data
+    )
 
 
 # ==============================
@@ -76,6 +80,10 @@ moderation.setup(
     api
 )
 
+moderation_actions.setup(
+    api
+)
+
 
 # ==============================
 # ثبت اطلاعات پیام
@@ -83,8 +91,15 @@ moderation.setup(
 
 def save_message_data(message):
 
-    chat = message.get("chat", {})
-    user = message.get("from", {})
+    chat = message.get(
+        "chat",
+        {}
+    )
+
+    user = message.get(
+        "from",
+        {}
+    )
 
     chat_id = chat.get("id")
     chat_type = chat.get("type")
@@ -98,7 +113,10 @@ def save_message_data(message):
     # فقط گروه‌ها
     # ==========================
 
-    if chat_type in ("group", "supergroup"):
+    if chat_type in (
+        "group",
+        "supergroup"
+    ):
 
         group_name = (
             chat.get("title")
@@ -139,10 +157,17 @@ def handle_message(message):
 
     save_message_data(message)
 
-    chat = message.get("chat", {})
+    chat = message.get(
+        "chat",
+        {}
+    )
+
     chat_id = chat.get("id")
 
-    text = message.get("text", "")
+    text = message.get(
+        "text",
+        ""
+    )
 
     if not chat_id:
         return
@@ -163,7 +188,7 @@ def handle_message(message):
         return
 
     # ==========================
-    # دستورات مدیریت
+    # دستورات مدیریت گروه
     # ==========================
 
     moderation_result = moderation.handle_message(
@@ -225,13 +250,96 @@ def handle_message(message):
 
         command = moderation_result["command"]
 
-        # --------------------------
-        # فعلاً فقط تست
-        # --------------------------
+        target_message = moderation_result[
+            "target_message"
+        ]
+
+        # ======================
+        # اجرای واقعی عملیات
+        # ======================
+
+        result = moderation_actions.execute_command(
+            command,
+            chat_id,
+            target_message
+        )
+
+        # ======================
+        # عملیات موفق
+        # ======================
+
+        if result.get("success"):
+
+            action = result.get(
+                "action"
+            )
+
+            success_messages = {
+
+                "kick":
+                    "👢 کاربر از گروه کیک شد.",
+
+                "ban":
+                    "🔨 کاربر بن شد.",
+
+                "unban":
+                    "🔓 بن کاربر برداشته شد.",
+
+                "mute":
+                    "🔇 کاربر ساکت شد.",
+
+                "unmute":
+                    "🔊 سکوت کاربر برداشته شد.",
+
+                "delete":
+                    "🗑️ پیام حذف شد.",
+            }
+
+            message_text = success_messages.get(
+                action,
+                "✅ انجام شد."
+            )
+
+            send_message(
+                chat_id,
+                message_text
+            )
+
+            return
+
+        # ======================
+        # اخطار فعلاً آماده نیست
+        # ======================
+
+        reason = result.get(
+            "reason"
+        )
+
+        if reason == "warn_not_ready":
+
+            send_message(
+                chat_id,
+                "⚠️ سیستم اخطار هنوز آماده نشده."
+            )
+
+            return
+
+        if reason == "unwarn_not_ready":
+
+            send_message(
+                chat_id,
+                "⚠️ سیستم حذف اخطار هنوز آماده نشده."
+            )
+
+            return
+
+        # ======================
+        # خطای اجرای عملیات
+        # ======================
 
         send_message(
             chat_id,
-            "مگه چیکار کرده؟ 🤔"
+            "❌ انجام عملیات موفق نبود."
         )
 
         return
@@ -251,7 +359,10 @@ def get_updates(offset=None):
     if offset is not None:
         data["offset"] = offset
 
-    return api("getUpdates", data)
+    return api(
+        "getUpdates",
+        data
+    )
 
 
 # ==============================
@@ -274,7 +385,9 @@ def start():
 
         try:
 
-            result = get_updates(offset)
+            result = get_updates(
+                offset
+            )
 
             if not result:
 
@@ -282,30 +395,43 @@ def start():
 
                 continue
 
-            updates = result.get("result", [])
+            updates = result.get(
+                "result",
+                []
+            )
 
             for update in updates:
 
-                update_id = update.get("update_id")
+                update_id = update.get(
+                    "update_id"
+                )
 
                 if update_id is not None:
 
                     offset = update_id + 1
 
-                message = update.get("message")
+                message = update.get(
+                    "message"
+                )
 
                 if message:
 
-                    handle_message(message)
+                    handle_message(
+                        message
+                    )
 
         except KeyboardInterrupt:
 
-            print("\n🛑 Bot stopped.")
+            print(
+                "\n🛑 Bot stopped."
+            )
 
             break
 
         except Exception as error:
 
-            print(f"Main Error: {error}")
+            print(
+                f"Main Error: {error}"
+            )
 
             time.sleep(3)
