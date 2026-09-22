@@ -1,3 +1,4 @@
+
 # ==============================
 # Group Manager Bot - Main
 # ==============================
@@ -162,7 +163,7 @@ def handle_message(message):
         return
 
     # ==========================
-    # دستورات مدیریت گروه
+    # دستورات مدیریت
     # ==========================
 
     moderation_result = moderation.handle_message(
@@ -186,16 +187,51 @@ def handle_message(message):
         return
 
     # ==========================
-    # فعلاً فقط تست تشخیص ادمین
+    # بدون هدف
     # ==========================
 
-    if moderation_result["type"] == "admin":
+    if moderation_result["type"] == "no_target":
 
         command = moderation_result["command"]
 
+        command_names = {
+            "kick": "کیک",
+            "ban": "بن",
+            "unban": "انبن",
+            "mute": "سکوت",
+            "unmute": "حذف سکوت",
+            "delete": "حذف",
+            "warn": "اخطار",
+            "unwarn": "حذف اخطار",
+        }
+
+        command_name = command_names.get(
+            command,
+            command
+        )
+
         send_message(
             chat_id,
-            f"✅ دستور «{command}» توسط ادمین دریافت شد."
+            f"کیو {command_name} کنم؟؟ 🤔"
+        )
+
+        return
+
+    # ==========================
+    # هدف پیدا شد
+    # ==========================
+
+    if moderation_result["type"] == "target_found":
+
+        command = moderation_result["command"]
+
+        # --------------------------
+        # فعلاً فقط تست
+        # --------------------------
+
+        send_message(
+            chat_id,
+            "مگه چیکار کرده؟ 🤔"
         )
 
         return
@@ -223,10 +259,6 @@ def get_updates(offset=None):
 # ==============================
 
 def start():
-
-    # ==========================
-    # راه‌اندازی دیتابیس
-    # ==========================
 
     database.init_db()
 
