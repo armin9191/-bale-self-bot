@@ -1,4 +1,3 @@
-```python
 # ==============================
 # Group Manager Bot - Main
 # ==============================
@@ -278,4 +277,3 @@ def start():
             print(f"Main Error: {error}")
 
             time.sleep(3)
-```
