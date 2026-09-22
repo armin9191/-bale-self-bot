@@ -123,11 +123,24 @@ def mute_user(chat_id, user_id):
         {
             "chat_id": chat_id,
             "user_id": user_id,
+
+            # جلوگیری از ارسال پیام
             "can_send_messages": False,
+
+            # جلوگیری از ارسال فایل و رسانه
             "can_send_media_messages": False,
+
+            # جلوگیری از استیکر و موارد مشابه
             "can_send_other_messages": False,
+
+            # جلوگیری از لینک
             "can_add_web_page_previews": False
         }
+    )
+
+    print(
+        "MUTE API RESULT:",
+        result
     )
 
     if not result:
