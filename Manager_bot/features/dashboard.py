@@ -37,21 +37,40 @@ def open_dashboard(message):
         {}
     )
 
-    chat_id = chat.get("id")
+    chat_id = chat.get(
+        "id"
+    )
 
     if not chat_id:
         return
 
     # ==========================
-    # فعلاً لینک مستقیم
+    # دریافت نام کاربری ربات
     # ==========================
 
     bot_username = get_bot_username()
+
+    if not bot_username:
+
+        send_message(
+            chat_id,
+            "❌ نتونستم لینک ورود به داشبورد رو بسازم."
+        )
+
+        return
+
+    # ==========================
+    # ساخت لینک PV
+    # ==========================
 
     private_url = private_dashboard_url(
         bot_username,
         chat_id
     )
+
+    # ==========================
+    # نمایش انتخاب
+    # ==========================
 
     send_message(
         chat_id,
@@ -75,7 +94,7 @@ def open_dashboard(message):
 
 
 # ==============================
-# دریافت اطلاعات ربات
+# دریافت نام کاربری ربات
 # ==============================
 
 def get_bot_username():
@@ -105,7 +124,7 @@ def get_bot_username():
 
 
 # ==============================
-# ساخت لینک ورود به PV
+# ساخت لینک داشبورد PV
 # ==============================
 
 def private_dashboard_url(
@@ -116,6 +135,42 @@ def private_dashboard_url(
     return (
         f"https://ble.ir/{bot_username}"
         f"?start=dashboard_{group_id}"
+    )
+
+
+# ==============================
+# باز کردن داشبورد در PV
+# ==============================
+
+def open_group_dashboard(
+    private_chat_id,
+    group_id
+):
+
+    if not private_chat_id:
+        return
+
+    send_message(
+        private_chat_id,
+        "⚙️ داشبورد گروه\n\n"
+        "گروهی که از آن وارد شدید انتخاب شد.\n\n"
+        "از اینجا می‌توانید تنظیمات گروه را مدیریت کنید.",
+        {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "🛡️ محافظت",
+                        "callback_data": f"group_security_{group_id}"
+                    }
+                ],
+                [
+                    {
+                        "text": "⚙️ تنظیمات گروه",
+                        "callback_data": f"group_settings_{group_id}"
+                    }
+                ]
+            ]
+        }
     )
 
 
