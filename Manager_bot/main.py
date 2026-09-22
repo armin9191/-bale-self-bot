@@ -47,7 +47,9 @@ def api(method, data=None):
 
     except Exception as error:
 
-        print(f"API Error: {error}")
+        print(
+            f"API Error: {error}"
+        )
 
         return None
 
@@ -56,7 +58,11 @@ def api(method, data=None):
 # ارسال پیام
 # ==============================
 
-def send_message(chat_id, text, reply_markup=None):
+def send_message(
+    chat_id,
+    text,
+    reply_markup=None
+):
 
     data = {
         "chat_id": chat_id,
@@ -134,10 +140,17 @@ def save_message_data(message):
         {}
     )
 
-    chat_id = chat.get("id")
-    chat_type = chat.get("type")
+    chat_id = chat.get(
+        "id"
+    )
 
-    user_id = user.get("id")
+    chat_type = chat.get(
+        "type"
+    )
+
+    user_id = user.get(
+        "id"
+    )
 
     if not chat_id:
         return
@@ -176,7 +189,7 @@ def save_message_data(message):
 
 
 # ==============================
-# پردازش دکمه‌های اینلاین
+# پردازش Callback
 # ==============================
 
 def handle_callback(callback_query):
@@ -210,6 +223,10 @@ def handle_callback(callback_query):
         "message_id"
     )
 
+    # ==========================
+    # پاسخ به کلیک
+    # ==========================
+
     if callback_id:
 
         api(
@@ -220,21 +237,6 @@ def handle_callback(callback_query):
         )
 
     if not chat_id or not message_id:
-        return
-
-    # ==========================
-    # داشبورد داخل پیوی
-    # ==========================
-
-    if callback_data == "dashboard_private":
-
-        edit_message(
-            chat_id,
-            message_id,
-            "📊 داشبورد\n\n"
-            "✅ داشبورد برای شما داخل پیوی باز شد."
-        )
-
         return
 
     # ==========================
@@ -254,6 +256,126 @@ def handle_callback(callback_query):
 
 
 # ==============================
+# باز کردن داشبورد از طریق PV
+# ==============================
+
+def handle_dashboard_start(
+    message,
+    payload
+):
+
+    if not payload:
+        return False
+
+    if not payload.startswith(
+        "dashboard_"
+    ):
+        return False
+
+    # ==========================
+    # دریافت شناسه گروه
+    # ==========================
+
+    try:
+
+        group_id = int(
+            payload.replace(
+                "dashboard_",
+                "",
+                1
+            )
+        )
+
+    except ValueError:
+
+        return False
+
+    # ==========================
+    # اطلاعات کاربر
+    # ==========================
+
+    user = message.get(
+        "from",
+        {}
+    )
+
+    user_id = user.get(
+        "id"
+    )
+
+    chat = message.get(
+        "chat",
+        {}
+    )
+
+    private_chat_id = chat.get(
+        "id"
+    )
+
+    if not user_id or not private_chat_id:
+        return True
+
+    # ==========================
+    # بررسی ادمین بودن
+    # ==========================
+
+    member_result = api(
+        "getChatMember",
+        {
+            "chat_id": group_id,
+            "user_id": user_id
+        }
+    )
+
+    if not member_result:
+
+        send_message(
+            private_chat_id,
+            "❌ نتونستم وضعیت مدیریت شما رو بررسی کنم."
+        )
+
+        return True
+
+    member = member_result.get(
+        "result",
+        {}
+    )
+
+    status = member.get(
+        "status"
+    )
+
+    # ==========================
+    # کاربر ادمین نیست
+    # ==========================
+
+    if status not in (
+        "administrator",
+        "creator"
+    ):
+
+        send_message(
+            private_chat_id,
+            "😂 عباس‌آقا، داشبورد مال ادمین‌هاست!\n\n"
+            "شما ادمین این گروه نیستی که بتونم "
+            "داشبوردشو باز کنم 😎"
+        )
+
+        return True
+
+    # ==========================
+    # باز کردن داشبورد
+    # ==========================
+
+    dashboard.open_group_dashboard(
+        private_chat_id,
+        group_id
+    )
+
+    return True
+
+
+# ==============================
 # پردازش پیام
 # ==============================
 
@@ -266,7 +388,9 @@ def handle_message(message):
     # ثبت اطلاعات
     # ==========================
 
-    save_message_data(message)
+    save_message_data(
+        message
+    )
 
     chat = message.get(
         "chat",
@@ -286,6 +410,53 @@ def handle_message(message):
         return
 
     # ==========================
+    # /start
+    # ==========================
+
+    if text.startswith(
+        "/start"
+    ):
+
+        parts = text.split(
+            " ",
+            1
+        )
+
+        payload = ""
+
+        if len(parts) > 1:
+
+            payload = parts[1].strip()
+
+        # ======================
+        # ورود مستقیم داشبورد
+        # ======================
+
+        if payload.startswith(
+            "dashboard_"
+        ):
+
+            handle_dashboard_start(
+                message,
+                payload
+            )
+
+            return
+
+        # ======================
+        # /start معمولی
+        # ======================
+
+        send_message(
+            chat_id,
+            "🤖 به ربات مدیریت گروه خوش اومدی!\n\n"
+            "برای مشاهده امکانات، یکی از گزینه‌های زیر رو انتخاب کن:",
+            keyboards.main_keyboard()
+        )
+
+        return
+
+    # ==========================
     # داشبورد
     # ==========================
 
@@ -293,21 +464,6 @@ def handle_message(message):
 
         dashboard.open_dashboard(
             message
-        )
-
-        return
-
-    # ==========================
-    # /start
-    # ==========================
-
-    if text == "/start":
-
-        send_message(
-            chat_id,
-            "🤖 به ربات مدیریت گروه خوش اومدی!\n\n"
-            "برای مشاهده امکانات، یکی از گزینه‌های زیر رو انتخاب کن:",
-            keyboards.main_keyboard()
         )
 
         return
@@ -342,17 +498,35 @@ def handle_message(message):
 
     if moderation_result["type"] == "no_target":
 
-        command = moderation_result["command"]
+        command = moderation_result[
+            "command"
+        ]
 
         command_names = {
-            "kick": "کیک",
-            "ban": "بن",
-            "unban": "انبن",
-            "mute": "سکوت",
-            "unmute": "حذف سکوت",
-            "delete": "حذف",
-            "warn": "اخطار",
-            "unwarn": "حذف اخطار",
+
+            "kick":
+                "کیک",
+
+            "ban":
+                "بن",
+
+            "unban":
+                "انبن",
+
+            "mute":
+                "سکوت",
+
+            "unmute":
+                "حذف سکوت",
+
+            "delete":
+                "حذف",
+
+            "warn":
+                "اخطار",
+
+            "unwarn":
+                "حذف اخطار",
         }
 
         command_name = command_names.get(
@@ -373,14 +547,16 @@ def handle_message(message):
 
     if moderation_result["type"] == "target_found":
 
-        command = moderation_result["command"]
+        command = moderation_result[
+            "command"
+        ]
 
         target_message = moderation_result[
             "target_message"
         ]
 
         # ======================
-        # اجرای واقعی عملیات
+        # اجرای عملیات
         # ======================
 
         result = moderation_actions.execute_command(
@@ -433,7 +609,7 @@ def handle_message(message):
             return
 
         # ======================
-        # اخطار فعلاً آماده نیست
+        # اخطار آماده نیست
         # ======================
 
         reason = result.get(
@@ -482,6 +658,7 @@ def get_updates(offset=None):
     }
 
     if offset is not None:
+
         data["offset"] = offset
 
     return api(
