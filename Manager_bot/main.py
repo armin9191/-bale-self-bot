@@ -1,3 +1,4 @@
+```python
 # ==============================
 # Group Manager Bot - Main
 # ==============================
@@ -7,6 +8,7 @@ import requests
 
 import config
 import keyboards
+import database
 
 
 # ==============================
@@ -31,6 +33,7 @@ def api(method, data=None):
     url = f"{BASE_URL}/{method}"
 
     try:
+
         response = SESSION.post(
             url,
             json=data or {},
@@ -40,7 +43,9 @@ def api(method, data=None):
         return response.json()
 
     except Exception as error:
+
         print(f"API Error: {error}")
+
         return None
 
 
@@ -115,9 +120,16 @@ def get_updates(offset=None):
 
 def start():
 
+    # ==========================
+    # راه‌اندازی دیتابیس
+    # ==========================
+
+    database.init_db()
+
     print("================================")
     print("🤖 Group Manager Bot")
     print("🚀 Bot is starting...")
+    print("🗄️ Database is ready")
     print("================================")
 
     offset = None
@@ -129,7 +141,9 @@ def start():
             result = get_updates(offset)
 
             if not result:
+
                 time.sleep(1)
+
                 continue
 
             updates = result.get("result", [])
@@ -139,19 +153,24 @@ def start():
                 update_id = update.get("update_id")
 
                 if update_id is not None:
+
                     offset = update_id + 1
 
                 message = update.get("message")
 
                 if message:
+
                     handle_message(message)
 
         except KeyboardInterrupt:
 
             print("\n🛑 Bot stopped.")
+
             break
 
         except Exception as error:
 
             print(f"Main Error: {error}")
+
             time.sleep(3)
+```
