@@ -10,12 +10,15 @@ import random
 # ==============================
 
 send_message = None
+api_request = None
 
 
-def setup(send_message_function):
+def setup(send_message_function, api_function):
     global send_message
+    global api_request
 
     send_message = send_message_function
+    api_request = api_function
 
 
 # ==============================
@@ -159,12 +162,86 @@ def detect_command(text):
 
 
 # ==============================
+# دریافت وضعیت عضو گروه
+# ==============================
+
+def get_member_status(chat_id, user_id):
+
+    if not api_request:
+        return None
+
+    result = api_request(
+        "getChatMember",
+        {
+            "chat_id": chat_id,
+            "user_id": user_id
+        }
+    )
+
+    if not result:
+        return None
+
+    if not result.get("ok", False):
+        return None
+
+    member = result.get("result")
+
+    if not member:
+        return None
+
+    return member.get("status")
+
+
+# ==============================
+# بررسی ادمین یا مالک
+# ==============================
+
+def is_admin(chat_id, user_id):
+
+    status = get_member_status(
+        chat_id,
+        user_id
+    )
+
+    return status in (
+        "administrator",
+        "creator"
+    )
+
+
+# ==============================
+# بررسی اینکه پیام داخل گروه است
+# ==============================
+
+def is_group_message(message):
+
+    if not message:
+        return False
+
+    chat = message.get("chat", {})
+
+    chat_type = chat.get("type")
+
+    return chat_type in (
+        "group",
+        "supergroup"
+    )
+
+
+# ==============================
 # پردازش دستور
 # ==============================
 
 def handle_message(message):
 
     if not message:
+        return False
+
+    # ==========================
+    # فقط گروه
+    # ==========================
+
+    if not is_group_message(message):
         return False
 
     text = message.get("text", "")
@@ -174,11 +251,35 @@ def handle_message(message):
     if not command:
         return False
 
+    chat = message.get("chat", {})
+    user = message.get("from", {})
+
+    chat_id = chat.get("id")
+    user_id = user.get("id")
+
+    if not chat_id or not user_id:
+        return False
+
     # ==========================
-    # فعلاً فقط تشخیص
+    # بررسی ادمین
+    # ==========================
+
+    if not is_admin(
+        chat_id,
+        user_id
+    ):
+        return {
+            "type": "not_admin",
+            "command": command,
+            "message": message
+        }
+
+    # ==========================
+    # ادمین
     # ==========================
 
     return {
+        "type": "admin",
         "command": command,
         "message": message
     }
