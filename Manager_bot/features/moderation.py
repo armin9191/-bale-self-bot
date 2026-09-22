@@ -14,6 +14,7 @@ api_request = None
 
 
 def setup(send_message_function, api_function):
+
     global send_message
     global api_request
 
@@ -37,7 +38,10 @@ NOT_ADMIN_MESSAGES = [
 
 
 def not_admin_message():
-    return random.choice(NOT_ADMIN_MESSAGES)
+
+    return random.choice(
+        NOT_ADMIN_MESSAGES
+    )
 
 
 # ==============================
@@ -210,7 +214,7 @@ def is_admin(chat_id, user_id):
 
 
 # ==============================
-# بررسی اینکه پیام داخل گروه است
+# بررسی گروه
 # ==============================
 
 def is_group_message(message):
@@ -220,12 +224,33 @@ def is_group_message(message):
 
     chat = message.get("chat", {})
 
-    chat_type = chat.get("type")
-
-    return chat_type in (
+    return chat.get("type") in (
         "group",
         "supergroup"
     )
+
+
+# ==============================
+# دریافت پیام هدف
+# ==============================
+
+def get_target_message(message):
+
+    reply_message = message.get(
+        "reply_to_message"
+    )
+
+    if not reply_message:
+        return None
+
+    target_user = reply_message.get(
+        "from"
+    )
+
+    if not target_user:
+        return None
+
+    return reply_message
 
 
 # ==============================
@@ -268,6 +293,7 @@ def handle_message(message):
         chat_id,
         user_id
     ):
+
         return {
             "type": "not_admin",
             "command": command,
@@ -275,11 +301,38 @@ def handle_message(message):
         }
 
     # ==========================
-    # ادمین
+    # پیدا کردن پیام هدف
     # ==========================
 
+    target_message = get_target_message(
+        message
+    )
+
+    # ==========================
+    # بدون ریپلای
+    # ==========================
+
+    if not target_message:
+
+        return {
+            "type": "no_target",
+            "command": command,
+            "message": message
+        }
+
+    # ==========================
+    # با ریپلای
+    # ==========================
+
+    target_user = target_message.get(
+        "from",
+        {}
+    )
+
     return {
-        "type": "admin",
+        "type": "target_found",
         "command": command,
-        "message": message
+        "message": message,
+        "target_message": target_message,
+        "target_user": target_user
     }
