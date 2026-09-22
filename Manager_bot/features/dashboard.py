@@ -42,6 +42,17 @@ def open_dashboard(message):
     if not chat_id:
         return
 
+    # ==========================
+    # فعلاً لینک مستقیم
+    # ==========================
+
+    bot_username = get_bot_username()
+
+    private_url = private_dashboard_url(
+        bot_username,
+        chat_id
+    )
+
     send_message(
         chat_id,
         "📊 داشبورد\n\n"
@@ -51,7 +62,7 @@ def open_dashboard(message):
                 [
                     {
                         "text": "👤 در پیوی",
-                        "callback_data": "dashboard_private"
+                        "url": private_url
                     },
                     {
                         "text": "👥 داخل گروه",
@@ -64,6 +75,51 @@ def open_dashboard(message):
 
 
 # ==============================
+# دریافت اطلاعات ربات
+# ==============================
+
+def get_bot_username():
+
+    if not api_request:
+        return ""
+
+    result = api_request(
+        "getMe"
+    )
+
+    if not result:
+        return ""
+
+    if not result.get("ok"):
+        return ""
+
+    bot = result.get(
+        "result",
+        {}
+    )
+
+    return bot.get(
+        "username",
+        ""
+    )
+
+
+# ==============================
+# ساخت لینک ورود به PV
+# ==============================
+
+def private_dashboard_url(
+    bot_username,
+    group_id
+):
+
+    return (
+        f"https://ble.ir/{bot_username}"
+        f"?start=dashboard_{group_id}"
+    )
+
+
+# ==============================
 # متن داشبورد باز شده
 # ==============================
 
@@ -72,16 +128,4 @@ def dashboard_opened_text():
     return (
         "📊 داشبورد\n\n"
         "✅ داشبورد برای شما داخل پیوی باز شد."
-    )
-
-
-# ==============================
-# لینک ورود به پیوی
-# ==============================
-
-def private_dashboard_url(bot_username, group_id):
-
-    return (
-        f"https://ble.ir/{bot_username}"
-        f"?start=dashboard_{group_id}"
     )
