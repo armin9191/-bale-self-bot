@@ -27,6 +27,30 @@ def setup(
 
 
 # ==============================
+# داشبورد اصلی
+# ==============================
+
+def dashboard_keyboard(group_id):
+
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "🛡️ محافظت",
+                    "callback_data": f"group_security_{group_id}"
+                }
+            ],
+            [
+                {
+                    "text": "⚙️ تنظیمات گروه",
+                    "callback_data": f"group_settings_{group_id}"
+                }
+            ]
+        ]
+    }
+
+
+# ==============================
 # باز کردن داشبورد
 # ==============================
 
@@ -45,7 +69,7 @@ def open_dashboard(message):
         return
 
     # ==========================
-    # دریافت نام کاربری ربات
+    # نام ربات
     # ==========================
 
     bot_username = get_bot_username()
@@ -60,7 +84,7 @@ def open_dashboard(message):
         return
 
     # ==========================
-    # ساخت لینک PV
+    # لینک PV
     # ==========================
 
     private_url = private_dashboard_url(
@@ -69,7 +93,7 @@ def open_dashboard(message):
     )
 
     # ==========================
-    # نمایش انتخاب
+    # انتخاب محل داشبورد
     # ==========================
 
     send_message(
@@ -124,7 +148,7 @@ def get_bot_username():
 
 
 # ==============================
-# ساخت لینک داشبورد PV
+# ساخت لینک PV
 # ==============================
 
 def private_dashboard_url(
@@ -139,48 +163,69 @@ def private_dashboard_url(
 
 
 # ==============================
-# باز کردن داشبورد در PV
+# داشبورد داخل PV
 # ==============================
 
 def open_group_dashboard(
-    private_chat_id,
-    group_id
+    chat_id,
+    group_id,
+    message_id=None
 ):
 
-    if not private_chat_id:
+    text = (
+        "⚙️ داشبورد گروه\n\n"
+        "🛡️ محافظت\n"
+        "🟢 ضد اسپم\n"
+        "🔴 ضد عکس\n"
+        "🔴 ضد ویدیو\n"
+        "🔴 ضد فیلم\n"
+        "🔴 ضد ویس\n"
+        "🔴 ضد فحش"
+    )
+
+    keyboard = dashboard_keyboard(
+        group_id
+    )
+
+    # ==========================
+    # اگر پیام داخل گروه است
+    # ==========================
+
+    if message_id is not None:
+
+        edit_message(
+            chat_id,
+            message_id,
+            text,
+            keyboard
+        )
+
         return
 
+    # ==========================
+    # اگر PV است
+    # ==========================
+
     send_message(
-        private_chat_id,
-        "⚙️ داشبورد گروه\n\n"
-        "گروهی که از آن وارد شدید انتخاب شد.\n\n"
-        "از اینجا می‌توانید تنظیمات گروه را مدیریت کنید.",
-        {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "🛡️ محافظت",
-                        "callback_data": f"group_security_{group_id}"
-                    }
-                ],
-                [
-                    {
-                        "text": "⚙️ تنظیمات گروه",
-                        "callback_data": f"group_settings_{group_id}"
-                    }
-                ]
-            ]
-        }
+        chat_id,
+        text,
+        keyboard
     )
 
 
 # ==============================
-# متن داشبورد باز شده
+# متن داشبورد
 # ==============================
 
 def dashboard_opened_text():
 
     return (
-        "📊 داشبورد\n\n"
-        "✅ داشبورد برای شما داخل پیوی باز شد."
+        "⚙️ داشبورد گروه\n\n"
+        "🛡️ محافظت\n"
+        "🟢 ضد اسپم\n"
+        "🔴 ضد عکس\n"
+        "🔴 ضد ویدیو\n"
+        "🔴 ضد فیلم\n"
+        "🔴 ضد ویس\n"
+        "🔴 ضد فحش"
     )
