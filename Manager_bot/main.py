@@ -73,6 +73,32 @@ def send_message(chat_id, text, reply_markup=None):
 
 
 # ==============================
+# ویرایش پیام
+# ==============================
+
+def edit_message(
+    chat_id,
+    message_id,
+    text,
+    reply_markup=None
+):
+
+    data = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text
+    }
+
+    if reply_markup:
+        data["reply_markup"] = reply_markup
+
+    return api(
+        "editMessageText",
+        data
+    )
+
+
+# ==============================
 # اتصال ماژول‌ها
 # ==============================
 
@@ -87,7 +113,7 @@ moderation_actions.setup(
 
 dashboard.setup(
     send_message,
-    None,
+    edit_message,
     api
 )
 
@@ -150,6 +176,84 @@ def save_message_data(message):
 
 
 # ==============================
+# پردازش دکمه‌های اینلاین
+# ==============================
+
+def handle_callback(callback_query):
+
+    if not callback_query:
+        return
+
+    callback_id = callback_query.get(
+        "id"
+    )
+
+    callback_data = callback_query.get(
+        "data"
+    )
+
+    message = callback_query.get(
+        "message",
+        {}
+    )
+
+    chat = message.get(
+        "chat",
+        {}
+    )
+
+    chat_id = chat.get(
+        "id"
+    )
+
+    message_id = message.get(
+        "message_id"
+    )
+
+    if callback_id:
+
+        api(
+            "answerCallbackQuery",
+            {
+                "callback_query_id": callback_id
+            }
+        )
+
+    if not chat_id or not message_id:
+        return
+
+    # ==========================
+    # داشبورد داخل پیوی
+    # ==========================
+
+    if callback_data == "dashboard_private":
+
+        edit_message(
+            chat_id,
+            message_id,
+            "📊 داشبورد\n\n"
+            "✅ داشبورد برای شما داخل پیوی باز شد."
+        )
+
+        return
+
+    # ==========================
+    # داشبورد داخل گروه
+    # ==========================
+
+    if callback_data == "dashboard_group":
+
+        edit_message(
+            chat_id,
+            message_id,
+            "⚙️ داشبورد گروه\n\n"
+            "تنظیمات گروه را از اینجا مدیریت کنید."
+        )
+
+        return
+
+
+# ==============================
 # پردازش پیام
 # ==============================
 
@@ -169,7 +273,9 @@ def handle_message(message):
         {}
     )
 
-    chat_id = chat.get("id")
+    chat_id = chat.get(
+        "id"
+    )
 
     text = message.get(
         "text",
@@ -428,6 +534,24 @@ def start():
                 if update_id is not None:
 
                     offset = update_id + 1
+
+                # ======================
+                # دکمه‌های اینلاین
+                # ======================
+
+                callback_query = update.get(
+                    "callback_query"
+                )
+
+                if callback_query:
+
+                    handle_callback(
+                        callback_query
+                    )
+
+                # ======================
+                # پیام معمولی
+                # ======================
 
                 message = update.get(
                     "message"
