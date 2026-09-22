@@ -11,6 +11,7 @@ import database
 
 from features import moderation
 from features import moderation_actions
+from features import dashboard
 
 
 # ==============================
@@ -81,6 +82,12 @@ moderation.setup(
 )
 
 moderation_actions.setup(
+    api
+)
+
+dashboard.setup(
+    send_message,
+    None,
     api
 )
 
@@ -170,6 +177,18 @@ def handle_message(message):
     )
 
     if not chat_id:
+        return
+
+    # ==========================
+    # داشبورد
+    # ==========================
+
+    if text.strip() == "داشبورد":
+
+        dashboard.open_dashboard(
+            message
+        )
+
         return
 
     # ==========================
