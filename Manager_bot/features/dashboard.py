@@ -61,3 +61,27 @@ def open_dashboard(message):
             ]
         }
     )
+
+
+# ==============================
+# متن داشبورد باز شده
+# ==============================
+
+def dashboard_opened_text():
+
+    return (
+        "📊 داشبورد\n\n"
+        "✅ داشبورد برای شما داخل پیوی باز شد."
+    )
+
+
+# ==============================
+# لینک ورود به پیوی
+# ==============================
+
+def private_dashboard_url(bot_username, group_id):
+
+    return (
+        f"https://ble.ir/{bot_username}"
+        f"?start=dashboard_{group_id}"
+    )
