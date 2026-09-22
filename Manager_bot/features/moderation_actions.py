@@ -26,10 +26,6 @@ def kick_user(chat_id, user_id):
     if not api_request:
         return False
 
-    # --------------------------
-    # خارج کردن کاربر
-    # --------------------------
-
     ban_result = api_request(
         "banChatMember",
         {
@@ -43,10 +39,6 @@ def kick_user(chat_id, user_id):
 
     if not ban_result.get("ok", False):
         return False
-
-    # --------------------------
-    # رفع فوری بن
-    # --------------------------
 
     unban_result = api_request(
         "unbanChatMember",
@@ -134,6 +126,166 @@ def mute_user(chat_id, user_id):
             "can_send_messages": False,
             "can_send_media_messages": False,
             "can_send_other_messages": False,
+            "can_add_web_page_previews": False
+        }
+    )
+
+    if not result:
+        return False
+
+    return result.get(
+        "ok",
+        False
+    )
+
+
+# ==============================
+# رفع سکوت
+# ==============================
+
+def unmute_user(chat_id, user_id):
+
+    if not api_request:
+        return False
+
+    result = api_request(
+        "restrictChatMember",
+        {
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "can_send_messages": True,
+            "can_send_media_messages": True,
+            "can_send_other_messages": True,
+            "can_add_web_page_previews": True
+        }
+    )
+
+    if not result:
+        return False
+
+    return result.get(
+        "ok",
+        False
+    )
+
+
+# ==============================
+# حذف پیام
+# ==============================
+
+def delete_message(chat_id, message_id):
+
+    if not api_request:
+        return False
+
+    result = api_request(
+        "deleteMessage",
+        {
+            "chat_id": chat_id,
+            "message_id": message_id
+        }
+    )
+
+    if not result:
+        return False
+
+    return result.get(
+        "ok",
+        False
+    )
+
+
+# ==============================
+# اجرای دستور
+# ==============================
+
+def execute_command(
+    command,
+    chat_id,
+    target_message
+):
+
+    if not target_message:
+
+        return {
+            "success": False,
+            "reason": "no_target"
+        }
+
+    target_user = target_message.get(
+        "from",
+        {}
+    )
+
+    target_user_id = target_user.get(
+        "id"
+    )
+
+    if not target_user_id:
+
+        return {
+            "success": False,
+            "reason": "invalid_target"
+        }
+
+    # ==========================
+    # کیک
+    # ==========================
+
+    if command == "kick":
+
+        success = kick_user(
+            chat_id,
+            target_user_id
+        )
+
+        return {
+            "success": success,
+            "action": "kick"
+        }
+
+    # ==========================
+    # بن
+    # ==========================
+
+    if command == "ban":
+
+        success = ban_user(
+            chat_id,
+            target_user_id
+        )
+
+        return {
+            "success": success,
+            "action": "ban"
+        }
+
+    # ==========================
+    # انبن
+    # ==========================
+
+    if command == "unban":
+
+        success = unban_user(
+            chat_id,
+            target_user_id
+        )
+
+        return {
+            "success": success,
+            "action": "unban"
+        }
+
+    # ==========================
+    # سکوت
+    # ==========================
+
+    if command == "mute":
+
+        success = mute_user(
+            chat_id,
+            target_user_id
+        )
 
         return {
             "success": success,
@@ -167,6 +319,7 @@ def mute_user(chat_id, user_id):
         )
 
         if not message_id:
+
             return {
                 "success": False,
                 "reason": "invalid_message"
@@ -203,6 +356,10 @@ def mute_user(chat_id, user_id):
             "success": False,
             "reason": "unwarn_not_ready"
         }
+
+    # ==========================
+    # دستور ناشناخته
+    # ==========================
 
     return {
         "success": False,
